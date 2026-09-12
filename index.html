@@ -87,7 +87,7 @@ h1,h2,h3,.head{
 
 .sidebar-cell{
   position:sticky;left:0;z-index:3;
-  width:310px;min-width:310px;
+  width:400px;min-width:400px;
   background:var(--panel);
   border-right:2px solid var(--line);
   display:flex;align-items:center;
@@ -99,6 +99,8 @@ h1,h2,h3,.head{
   align-items:flex-end;padding-bottom:8px;
 }
 .row.category-row .sidebar-cell{background:#EAE3D2;}
+.datecol{width:50px;flex-shrink:0;font-size:11px;color:var(--ink-soft);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.row.header-row .datecol{color:#9FB0BC;font-size:10px;text-transform:uppercase;letter-spacing:0.04em;}
 
 .chart-cell{position:relative;flex-shrink:0;}
 
@@ -178,7 +180,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
 }
 
 /* Add row / forms */
-#addrow{padding:10px 14px;border-top:1px solid var(--line);background:var(--panel);position:sticky;left:0;width:fit-content;min-width:100%;display:flex;gap:8px;z-index:6;}
+#addrow{padding:10px 14px;border-top:1px solid var(--line);background:var(--panel);position:sticky;left:0;bottom:0;width:fit-content;min-width:100%;display:flex;gap:8px;z-index:6;box-shadow:0 -2px 8px rgba(0,0,0,0.08);}
 .addform{
   display:none;flex-wrap:wrap;gap:8px;align-items:flex-end;
   background:#fff;border:1px solid var(--line);border-radius:4px;padding:12px;margin-top:8px;
@@ -309,6 +311,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
   <div id="loading">Loading schedule…</div>
   <div id="body" style="display:none;">
     <div id="printScaleWrap"><div id="gridwrap"></div></div>
+    <div class="legend" id="legend"></div>
     <div id="addrow">
       <button class="addtoggle" id="addToggleBtn">+ Add task</button>
       <button class="addtoggle" id="addCatBtn">+ Add category</button>
@@ -341,7 +344,6 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
         <button class="ghostbtn" id="cancelNewBtn">Cancel</button>
       </div>
     </div>
-    <div class="legend" id="legend"></div>
   </div>
   <div id="printListWrap" class="print-only"></div>
   <button id="exitPrintBtn" style="display:none;position:fixed;top:12px;right:12px;z-index:200;background:var(--ink);color:#fff;border:none;border-radius:4px;padding:8px 14px;font:inherit;cursor:pointer;">Exit Print View</button>
@@ -471,7 +473,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
 
   // Bump this with every update handed off, so you can glance at the top bar and
   // confirm a new deploy actually loaded (vs. a stale cached copy).
-  const APP_VERSION = 'v1.1';
+  const APP_VERSION = 'v1.2';
   { const v = document.getElementById('appVersion'); if(v) v.textContent = APP_VERSION; }
 
   // Set this to your Wix Velo backend function URL (e.g. "https://yourdomain.com/_functions/generateSchedule")
@@ -480,7 +482,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
   const AI_PROXY_URL = null;
   const DAY_MS = 86400000;
   const ROW_H = 46;
-  const SIDEBAR_W = 310;
+  const SIDEBAR_W = 400;
   const UNCATEGORIZED = 'Uncategorized';
 
   let projectList = [];
@@ -627,6 +629,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
     return d;
   }
   function fmtDate(d){ return d.toLocaleDateString('en-US',{month:'short',day:'numeric'}); }
+  function fmtDateShort(d){ return d.toLocaleDateString('en-US',{month:'numeric',day:'numeric'}); }
   function isWeekendDate(d){ const day=d.getDay(); return day===0||day===6; }
 
   // ---------- work-week (5-day week) offset conversion ----------
@@ -741,7 +744,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
     headerRow.className='row header-row';
     const hsb = document.createElement('div');
     hsb.className='sidebar-cell';
-    hsb.innerHTML = `<div class="taskname" style="font-family:'Barlow Condensed';font-size:15px;font-weight:600;color:#fff;">Task</div>`;
+    hsb.innerHTML = `<div class="taskname" style="font-family:'Barlow Condensed';font-size:15px;font-weight:600;color:#fff;">Task</div><div class="datecol">Start</div><div class="datecol">Finish</div>`;
     headerRow.appendChild(hsb);
     const hchart = document.createElement('div');
     hchart.className='chart-cell dateheader';
@@ -842,6 +845,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
           nameWrap.innerHTML = `<input type="text" id="editCatInput" value="${escapeHtml(cat)}">`;
         } else {
           nameWrap.innerHTML = `${escapeHtml(cat)}<span class="catcount">(${members.length})</span>`;
+          nameWrap.title = cat;
           if(cat!==UNCATEGORIZED){
             nameWrap.onclick=()=>{ editingCategory=cat; render(); setTimeout(()=>{const i=el('editCatInput'); if(i){i.focus(); i.select();}},0); };
           }
@@ -849,6 +853,18 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
         sb.appendChild(nameWrap);
 
         const rollup = categoryRollup(members, result);
+        const cesCal = calOff(rollup.es), cefCal = calOff(rollup.ef);
+
+        const catStartCol=document.createElement('div');
+        catStartCol.className='datecol';
+        if(members.length){ catStartCol.textContent=fmtDateShort(addDays(startDateStr,cesCal)); catStartCol.title='Start: '+fmtDate(addDays(startDateStr,cesCal)); }
+        sb.appendChild(catStartCol);
+
+        const catFinishCol=document.createElement('div');
+        catFinishCol.className='datecol';
+        if(members.length){ catFinishCol.textContent=fmtDateShort(addDays(startDateStr,cefCal)); catFinishCol.title='Finish: '+fmtDate(addDays(startDateStr,cefCal)); }
+        sb.appendChild(catFinishCol);
+
         const pctBadge=document.createElement('div');
         pctBadge.className='catpct'; pctBadge.textContent = members.length ? rollup.percent+'%' : '';
         sb.appendChild(pctBadge);
@@ -876,7 +892,6 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
         drawBackground(cc);
 
         if(members.length){
-          const cesCal = calOff(rollup.es), cefCal = calOff(rollup.ef);
           const cbar=document.createElement('div');
           cbar.className='catbar';
           cbar.style.left=(cesCal*ppd)+'px';
@@ -897,6 +912,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
       // ---- task row ----
       const t = rowData.task;
       const r = result[t.id]||{ES:0,EF:0,critical:false,slack:0};
+      const esCal = calOff(r.ES), efCal = calOff(r.EF);
       row.className='row';
 
       const sb=document.createElement('div');
@@ -909,9 +925,20 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
         nameWrap.innerHTML = `<input type="text" id="editNameInput" value="${escapeHtml(t.name)}">`;
       } else {
         nameWrap.textContent = t.name;
+        nameWrap.title = t.name;
         nameWrap.onclick=()=>{ editingTaskId=t.id; render(); setTimeout(()=>{const i=el('editNameInput'); if(i){i.focus(); i.select();}},0); };
       }
       sb.appendChild(nameWrap);
+
+      const startCol=document.createElement('div');
+      startCol.className='datecol'; startCol.textContent=fmtDateShort(addDays(startDateStr,esCal));
+      startCol.title='Start: '+fmtDate(addDays(startDateStr,esCal));
+      sb.appendChild(startCol);
+
+      const finishCol=document.createElement('div');
+      finishCol.className='datecol'; finishCol.textContent=fmtDateShort(addDays(startDateStr,efCal));
+      finishCol.title='Finish: '+fmtDate(addDays(startDateStr,efCal));
+      sb.appendChild(finishCol);
 
       const dur=document.createElement('input');
       dur.type='number'; dur.className='numinput'; dur.value=t.duration; dur.min=1; dur.title='Duration (days)';
@@ -978,7 +1005,6 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
       cc.className='chart-cell'; cc.style.width=chartWidth+'px'; cc.style.height=ROW_H+'px';
       drawBackground(cc);
 
-      const esCal = calOff(r.ES), efCal = calOff(r.EF);
       const bar=document.createElement('div');
       bar.className='bar'+(r.critical?' critical':'');
       bar.style.left=(esCal*ppd)+'px';
@@ -1056,8 +1082,8 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
         if(depIdx===undefined) return;
         const r1=result[dep.id], r2=result[t.id];
         if(!r1||!r2) return;
-        const x1=r1.EF*ppd, y1=depIdx*ROW_H+ROW_H/2;
-        const x2=r2.ES*ppd, y2=idx*ROW_H+ROW_H/2;
+        const x1=calOff(r1.EF)*ppd, y1=depIdx*ROW_H+ROW_H/2;
+        const x2=calOff(r2.ES)*ppd, y2=idx*ROW_H+ROW_H/2;
         const midX = x1 + Math.max(8,(x2-x1)/2);
         const d = `M${x1},${y1} L${midX},${y1} L${midX},${y2} L${x2-6},${y2}`;
         const p=document.createElementNS(svgNS,'path');
@@ -1069,7 +1095,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
           lblEl.setAttribute('x', midX+3); lblEl.setAttribute('y', (y1+y2)/2-3);
           lblEl.setAttribute('font-size','9.5'); lblEl.setAttribute('font-family',"'Work Sans',sans-serif");
           lblEl.setAttribute('fill', dep.lag>0 ? '#7A5A2A' : '#2C5F7C'); lblEl.setAttribute('font-weight','600');
-          lblEl.textContent = (dep.lag>0?'+':'')+dep.lag+'d';
+          lblEl.textContent = (dep.lag>0?'+':'')+dep.lag+(workWeek?'wd':'d');
           svg.appendChild(lblEl);
         }
       });
