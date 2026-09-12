@@ -87,19 +87,30 @@ h1,h2,h3,.head{
 
 .sidebar-cell{
   position:sticky;left:0;z-index:3;
-  width:400px;min-width:400px;
+  width:480px;min-width:480px;
   background:var(--panel);
   border-right:2px solid var(--line);
-  display:flex;align-items:center;
+  display:grid;
+  grid-template-columns:
+    [lead] 26px
+    [name] 1fr
+    [start] 50px
+    [finish] 50px
+    [dur] 32px
+    [pct] 32px
+    [cat] 22px
+    [details] 20px
+    [del] 20px;
+  column-gap:5px;
+  align-items:center;
   padding:0 8px;
-  gap:5px;
 }
 .row.header-row .sidebar-cell{
   background:var(--ink);color:var(--paper);
   align-items:flex-end;padding-bottom:8px;
 }
 .row.category-row .sidebar-cell{background:#EAE3D2;}
-.datecol{width:50px;flex-shrink:0;font-size:11px;color:var(--ink-soft);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.datecol{width:50px;font-size:11px;color:var(--ink-soft);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .row.header-row .datecol{color:#9FB0BC;font-size:10px;text-transform:uppercase;letter-spacing:0.04em;}
 
 .chart-cell{position:relative;flex-shrink:0;}
@@ -152,7 +163,7 @@ h1,h2,h3,.head{
 .bar.critical{box-shadow:inset 0 0 0 2px var(--critical);}
 .bar .fill{position:absolute;left:0;top:0;bottom:0;background:rgba(0,0,0,0.28);}
 .bar .lbl{position:relative;z-index:1;display:flex;align-items:center;height:100%;
-  font-size:11px;color:#fff;padding:0 8px;white-space:nowrap;overflow:hidden;}
+  font-size:11px;color:#fff;padding:0 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 
 .catbar{position:absolute;top:14px;height:18px;border-radius:2px;background:var(--catbar);}
 .catbar .fill{position:absolute;left:0;top:0;bottom:0;background:var(--catbar-fill);border-radius:2px 0 0 2px;}
@@ -285,6 +296,10 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
     <label style="display:flex;align-items:center;gap:5px;cursor:pointer;">
       <input type="checkbox" id="workWeekToggle" style="width:auto;">
       5-Day Work Week
+    </label>
+    <label style="display:flex;align-items:center;gap:5px;cursor:pointer;">
+      <input type="checkbox" id="barNamesToggle" style="width:auto;">
+      Names on Bars
     </label>
     <div class="zoomgroup">
       <button id="zoomDay">Day</button>
@@ -501,7 +516,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
 
   // Bump this with every update handed off, so you can glance at the top bar and
   // confirm a new deploy actually loaded (vs. a stale cached copy).
-  const APP_VERSION = 'v1.3';
+  const APP_VERSION = 'v1.4';
   { const v = document.getElementById('appVersion'); if(v) v.textContent = APP_VERSION; }
 
   // Set this to your Wix Velo backend function URL (e.g. "https://yourdomain.com/_functions/generateSchedule")
@@ -510,7 +525,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
   const AI_PROXY_URL = null;
   const DAY_MS = 86400000;
   const ROW_H = 46;
-  const SIDEBAR_W = 400;
+  const SIDEBAR_W = 480;
   const UNCATEGORIZED = 'Uncategorized';
 
   let projectList = [];
@@ -520,6 +535,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
   let categoryOrder = [];
   let collapsedCategories = [];
   let zoom = 'week';
+  let showBarNames = false;
   let editingTaskId = null;
   let editingCategory = null;
   let currentUid = null;
@@ -798,7 +814,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
     headerRow.className='row header-row';
     const hsb = document.createElement('div');
     hsb.className='sidebar-cell';
-    hsb.innerHTML = `<div class="taskname" style="font-family:'Barlow Condensed';font-size:15px;font-weight:600;color:#fff;">Task</div><div class="datecol">Start</div><div class="datecol">Finish</div>`;
+    hsb.innerHTML = `<div class="taskname" style="grid-column:name;font-family:'Barlow Condensed';font-size:15px;font-weight:600;color:#fff;">Task</div><div class="datecol" style="grid-column:start;">Start</div><div class="datecol" style="grid-column:finish;">Finish</div>`;
     headerRow.appendChild(hsb);
     const hchart = document.createElement('div');
     hchart.className='chart-cell dateheader';
@@ -878,6 +894,8 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
         const sb=document.createElement('div');
         sb.className='sidebar-cell';
 
+        const lead=document.createElement('div');
+        lead.style.cssText='grid-column:lead;display:flex;align-items:center;gap:4px;';
         const toggle=document.createElement('button');
         toggle.className='collapsebtn';
         toggle.textContent = collapsed ? '▶' : '▼';
@@ -886,15 +904,17 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
           else collapsedCategories.push(cat);
           persist(); render();
         };
-        sb.appendChild(toggle);
+        lead.appendChild(toggle);
 
         const dot=document.createElement('div');
         dot.style.width='10px'; dot.style.height='10px'; dot.style.borderRadius='50%'; dot.style.flexShrink='0';
         dot.style.background = cat===UNCATEGORIZED ? '#8A8F94' : categoryColor(cat);
-        sb.appendChild(dot);
+        lead.appendChild(dot);
+        sb.appendChild(lead);
 
         const nameWrap=document.createElement('div');
         nameWrap.className='catname';
+        nameWrap.style.gridColumn='name';
         if(editingCategory===cat && cat!==UNCATEGORIZED){
           nameWrap.innerHTML = `<input type="text" id="editCatInput" value="${escapeHtml(cat)}">`;
         } else {
@@ -910,22 +930,23 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
         const cesCal = calOff(rollup.es), cefCal = calOff(rollup.ef);
 
         const catStartCol=document.createElement('div');
-        catStartCol.className='datecol';
+        catStartCol.className='datecol'; catStartCol.style.gridColumn='start';
         if(members.length){ catStartCol.textContent=fmtDateShort(addDays(startDateStr,cesCal)); catStartCol.title='Start: '+fmtDate(addDays(startDateStr,cesCal)); }
         sb.appendChild(catStartCol);
 
         const catFinishCol=document.createElement('div');
-        catFinishCol.className='datecol';
+        catFinishCol.className='datecol'; catFinishCol.style.gridColumn='finish';
         if(members.length){ catFinishCol.textContent=fmtDateShort(addDays(startDateStr,cefCal)); catFinishCol.title='Finish: '+fmtDate(addDays(startDateStr,cefCal)); }
         sb.appendChild(catFinishCol);
 
         const pctBadge=document.createElement('div');
-        pctBadge.className='catpct'; pctBadge.textContent = members.length ? rollup.percent+'%' : '';
+        pctBadge.className='catpct'; pctBadge.style.gridColumn='pct';
+        pctBadge.textContent = members.length ? rollup.percent+'%' : '';
         sb.appendChild(pctBadge);
 
         if(cat!==UNCATEGORIZED){
           const delBtn=document.createElement('button');
-          delBtn.className='rowbtn'; delBtn.title='Delete category';
+          delBtn.className='rowbtn'; delBtn.title='Delete category'; delBtn.style.gridColumn='del';
           delBtn.textContent = rowData._confirm ? 'Confirm?' : '✕';
           delBtn.style.color = rowData._confirm ? 'var(--critical)' : '';
           delBtn.onclick=()=>{
@@ -971,10 +992,11 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
 
       const sb=document.createElement('div');
       sb.className='sidebar-cell';
-      sb.style.paddingLeft='22px';
 
       const nameWrap=document.createElement('div');
       nameWrap.className='taskname'+(editingTaskId===t.id?' editing':'');
+      nameWrap.style.gridColumn='name';
+      nameWrap.style.paddingLeft='14px';
       if(editingTaskId===t.id){
         nameWrap.innerHTML = `<input type="text" id="editNameInput" value="${escapeHtml(t.name)}">`;
       } else {
@@ -985,27 +1007,22 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
       sb.appendChild(nameWrap);
 
       const startCol=document.createElement('div');
-      startCol.className='datecol'; startCol.textContent=fmtDateShort(addDays(startDateStr,esCal));
+      startCol.className='datecol'; startCol.style.gridColumn='start'; startCol.textContent=fmtDateShort(addDays(startDateStr,esCal));
       startCol.title='Start: '+fmtDate(addDays(startDateStr,esCal));
       sb.appendChild(startCol);
 
       const finishCol=document.createElement('div');
-      finishCol.className='datecol'; finishCol.textContent=fmtDateShort(addDays(startDateStr,efCal));
+      finishCol.className='datecol'; finishCol.style.gridColumn='finish'; finishCol.textContent=fmtDateShort(addDays(startDateStr,efCal));
       finishCol.title='Finish: '+fmtDate(addDays(startDateStr,efCal));
       sb.appendChild(finishCol);
 
       const dur=document.createElement('input');
-      dur.type='number'; dur.className='numinput'; dur.value=t.duration; dur.min=1; dur.title='Duration (days)';
+      dur.type='number'; dur.className='numinput'; dur.style.gridColumn='dur'; dur.value=t.duration; dur.min=1; dur.title='Duration (days)';
       dur.onchange=(e)=>{ t.duration=Math.max(1,parseInt(e.target.value)||1); persist(); render(); };
       sb.appendChild(dur);
 
-      const pct=document.createElement('input');
-      pct.type='number'; pct.className='numinput'; pct.value=t.percent||0; pct.min=0; pct.max=100; pct.title='% complete';
-      pct.onchange=(e)=>{ t.percent=Math.min(100,Math.max(0,parseInt(e.target.value)||0)); persist(); render(); };
-      sb.appendChild(pct);
-
       const catBtn=document.createElement('button');
-      catBtn.className='catbtn';
+      catBtn.className='catbtn'; catBtn.style.gridColumn='cat';
       catBtn.style.background = categoryColor(t.category||UNCATEGORIZED);
       catBtn.title='Category: '+(t.category||UNCATEGORIZED);
       catBtn.textContent = (t.category||UNCATEGORIZED).slice(0,2);
@@ -1013,12 +1030,12 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
       sb.appendChild(catBtn);
 
       const detailsBtn=document.createElement('button');
-      detailsBtn.className='rowbtn'; detailsBtn.title='Open task details'; detailsBtn.textContent='▤';
+      detailsBtn.className='rowbtn'; detailsBtn.style.gridColumn='details'; detailsBtn.title='Open task details (includes % complete)'; detailsBtn.textContent='▤';
       detailsBtn.onclick=(e)=>{ e.stopPropagation(); openModal(t.id); };
       sb.appendChild(detailsBtn);
 
       const delBtn=document.createElement('button');
-      delBtn.className='rowbtn'; delBtn.title='Delete';
+      delBtn.className='rowbtn'; delBtn.style.gridColumn='del'; delBtn.title='Delete';
       delBtn.textContent = t._confirm ? 'Confirm?' : '✕';
       delBtn.style.color = t._confirm ? 'var(--critical)' : '';
       delBtn.onclick=(e)=>{ e.stopPropagation();
@@ -1069,7 +1086,9 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
       bar.appendChild(fill);
       const lbl=document.createElement('div');
       lbl.className='lbl';
-      lbl.textContent = ppd*(efCal-esCal)>60 ? `${t.duration}${workWeek?'wd':'d'} · ${t.percent||0}%` : '';
+      lbl.textContent = showBarNames
+        ? t.name
+        : (ppd*(efCal-esCal)>60 ? `${t.duration}${workWeek?'wd':'d'} · ${t.percent||0}%` : '');
       bar.appendChild(lbl);
       bar.title=`${t.name}\n${fmtDate(addDays(startDateStr,esCal))} → ${fmtDate(addDays(startDateStr,efCal))}\n${r.critical?'Critical path':'Slack: '+r.slack+(workWeek?'wd':'d')}\n${t.percent||0}% complete\nDrag to reschedule · click to open details`;
       cc.appendChild(bar);
@@ -1544,6 +1563,11 @@ Guidelines:
   el('workWeekToggle').addEventListener('change',(e)=>{
     workWeek = e.target.checked;
     persist(); render();
+  });
+
+  el('barNamesToggle').addEventListener('change',(e)=>{
+    showBarNames = e.target.checked;
+    render();
   });
 
   el('deleteProjectBtn').addEventListener('click', async ()=>{
