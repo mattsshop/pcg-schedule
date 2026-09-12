@@ -1,0 +1,1780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Site Schedule</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Work+Sans:wght@400;500;600;700&display=swap');
+
+:root{
+  --paper:#E7EBEE;
+  --panel:#F3F5F7;
+  --ink:#16232E;
+  --ink-soft:#4C5C68;
+  --line:#B7C4CC;
+  --line-soft:#D3DBE1;
+  --accent:#2C5F7C;
+  --accent-deep:#1D4258;
+  --critical:#C85A1D;
+  --critical-soft:#F0D9C7;
+  --weekend:#DCE2E6;
+  --today:#B23A2E;
+  --catbar:#16232E;
+  --catbar-fill:#4C7FA0;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:'Work Sans',sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,.head{
+  font-family:'Barlow Condensed',sans-serif;
+  font-weight:700;
+  letter-spacing:0.01em;
+}
+#app{display:none;flex-direction:column;height:100vh;}
+
+/* ---- Top bar ---- */
+#topbar{
+  background:var(--ink);
+  color:var(--paper);
+  padding:14px 18px;
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:14px;
+  border-bottom:3px solid var(--critical);
+}
+#topbar .brand{
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:22px;
+  font-weight:700;
+  margin-right:6px;
+  white-space:nowrap;
+}
+#topbar select, #topbar input[type=date], #topbar button{
+  font-family:'Work Sans',sans-serif;
+  font-size:13px;
+  background:#22323F;
+  color:var(--paper);
+  border:1px solid #3B4E5C;
+  border-radius:3px;
+  padding:6px 8px;
+}
+#topbar button{cursor:pointer;}
+#topbar button:hover{background:#2C4150;}
+#topbar .zoomgroup{display:flex;border:1px solid #3B4E5C;border-radius:3px;overflow:hidden;}
+#topbar .zoomgroup button{border:none;border-radius:0;}
+#topbar .zoomgroup button.active{background:var(--accent);}
+#topbar label{font-size:11px;color:#9FB0BC;text-transform:uppercase;letter-spacing:0.06em;margin-right:4px;}
+#topbar .grow{flex:1;}
+#projFinish{font-size:13px;color:#CFE0E8;}
+#projFinish b{color:#fff;}
+#storagenote{font-size:11px;color:#9FB0BC;}
+
+/* ---- Body layout ---- */
+#body{flex:1;overflow:auto;position:relative;background:var(--panel);}
+#gridwrap{display:inline-block;min-width:100%;position:relative;}
+
+.row{display:flex;border-bottom:1px solid var(--line-soft);height:46px;}
+.row.header-row{height:auto;border-bottom:2px solid var(--line);}
+.row.category-row{background:#EAE3D2;}
+.row.category-row .chart-cell{background:#F1ECDE;}
+
+.sidebar-cell{
+  position:sticky;left:0;z-index:3;
+  width:310px;min-width:310px;
+  background:var(--panel);
+  border-right:2px solid var(--line);
+  display:flex;align-items:center;
+  padding:0 8px;
+  gap:5px;
+}
+.row.header-row .sidebar-cell{
+  background:var(--ink);color:var(--paper);
+  align-items:flex-end;padding-bottom:8px;
+}
+.row.category-row .sidebar-cell{background:#EAE3D2;}
+
+.chart-cell{position:relative;flex-shrink:0;}
+
+.taskname{
+  flex:1;font-size:13px;font-weight:500;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  cursor:text;border-bottom:1px dashed transparent;
+  min-width:0;
+}
+.taskname:hover{border-bottom:1px dashed var(--line);}
+.taskname.editing{white-space:normal;overflow:visible;}
+.taskname input{width:100%;font:inherit;border:1px solid var(--accent);border-radius:2px;padding:2px 4px;}
+
+.catname{
+  flex:1;font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:600;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:text;color:var(--ink);
+  min-width:0;
+}
+.catname input{width:100%;font:inherit;border:1px solid var(--accent);border-radius:2px;padding:2px 4px;}
+.catcount{font-size:11px;color:var(--ink-soft);font-weight:400;margin-left:4px;}
+.catpct{font-size:11px;color:var(--ink-soft);font-weight:600;white-space:nowrap;}
+
+.numinput{
+  width:32px;font-size:11px;text-align:center;
+  border:1px solid var(--line);border-radius:2px;padding:3px 1px;
+  background:#fff;
+}
+.rowbtn{
+  border:none;background:none;color:var(--ink-soft);cursor:pointer;
+  font-size:14px;padding:2px 3px;line-height:1;flex-shrink:0;
+}
+.rowbtn:hover{color:var(--critical);}
+.rowbtn.link:hover{color:var(--accent);}
+.catbtn{
+  width:22px;height:22px;border-radius:50%;border:1px solid rgba(0,0,0,0.15);
+  font-size:9px;color:#fff;font-weight:700;cursor:pointer;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;text-transform:uppercase;
+}
+.collapsebtn{
+  border:none;background:none;color:var(--ink);cursor:pointer;font-size:11px;
+  width:16px;flex-shrink:0;padding:0;
+}
+
+/* Gantt bars */
+.bar{
+  position:absolute;top:9px;height:28px;border-radius:2px;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,0.15);overflow:hidden;
+}
+.bar.critical{box-shadow:inset 0 0 0 2px var(--critical);}
+.bar .fill{position:absolute;left:0;top:0;bottom:0;background:rgba(0,0,0,0.28);}
+.bar .lbl{position:relative;z-index:1;display:flex;align-items:center;height:100%;
+  font-size:11px;color:#fff;padding:0 8px;white-space:nowrap;overflow:hidden;}
+
+.catbar{position:absolute;top:14px;height:18px;border-radius:2px;background:var(--catbar);}
+.catbar .fill{position:absolute;left:0;top:0;bottom:0;background:var(--catbar-fill);border-radius:2px 0 0 2px;}
+.catbar .lbl{position:absolute;left:100%;top:50%;transform:translateY(-50%);margin-left:8px;
+  font-size:11px;font-weight:600;color:var(--ink-soft);white-space:nowrap;}
+
+svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
+
+.gridline{position:absolute;top:0;bottom:0;width:1px;background:var(--line-soft);}
+.gridline.week{background:var(--line);}
+.weekendband{position:absolute;top:0;bottom:0;background:var(--weekend);}
+.todayline{position:absolute;top:0;bottom:0;width:2px;background:var(--today);z-index:2;}
+.todayline::after{
+  content:'TODAY';position:absolute;top:-1px;left:4px;font-size:9px;
+  font-family:'Barlow Condensed',sans-serif;letter-spacing:0.08em;color:var(--today);font-weight:700;
+}
+
+.dateheader{display:flex;flex-direction:column;}
+.monthlabel{
+  position:absolute;top:0;font-size:11px;font-weight:600;color:#CFE0E8;
+  border-left:1px solid #3B4E5C;padding-left:4px;
+}
+.ticklabel{
+  position:absolute;top:0;font-size:10px;color:#9FB0BC;transform:translateX(2px);
+}
+
+/* Add row / forms */
+#addrow{padding:10px 14px;border-top:1px solid var(--line);background:var(--panel);position:sticky;left:0;width:fit-content;min-width:100%;display:flex;gap:8px;z-index:6;}
+.addform{
+  display:none;flex-wrap:wrap;gap:8px;align-items:flex-end;
+  background:#fff;border:1px solid var(--line);border-radius:4px;padding:12px;margin-top:8px;
+  position:absolute;z-index:20;box-shadow:0 6px 20px rgba(0,0,0,0.18);
+}
+.addform.open{display:flex;}
+.field{display:flex;flex-direction:column;gap:3px;}
+.field label{font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-soft);}
+.field input, .field select{
+  font:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:3px;background:#fff;
+}
+.depchecks{display:flex;flex-wrap:wrap;gap:6px;max-width:320px;}
+.depchecks label{
+  display:flex;align-items:center;gap:4px;font-size:12px;font-weight:400;
+  background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:3px 9px;cursor:pointer;
+  text-transform:none;letter-spacing:0;color:var(--ink);
+}
+.primarybtn{
+  background:var(--accent);color:#fff;border:none;border-radius:3px;
+  padding:8px 16px;font-family:'Work Sans';font-size:13px;font-weight:600;cursor:pointer;
+}
+.primarybtn:hover{background:var(--accent-deep);}
+.ghostbtn{
+  background:none;border:1px solid var(--line);color:var(--ink-soft);border-radius:3px;
+  padding:8px 14px;font-size:13px;cursor:pointer;
+}
+.addtoggle{
+  border:1px dashed var(--accent);background:none;color:var(--accent);
+  border-radius:3px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;
+}
+.addtoggle:hover{background:rgba(44,95,124,0.08);}
+
+.legend{display:flex;gap:14px;padding:8px 18px;font-size:11px;color:var(--ink-soft);align-items:center;background:var(--panel);border-top:1px solid var(--line-soft);flex-wrap:wrap;}
+.legend .swatch{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:5px;vertical-align:-1px;}
+
+.popover{
+  position:absolute;background:#fff;border:1px solid var(--line);border-radius:4px;
+  box-shadow:0 4px 14px rgba(0,0,0,0.18);padding:10px;z-index:10;width:250px;
+}
+.popover h4{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-soft);font-family:'Work Sans';font-weight:600;}
+.catoption{
+  display:flex;align-items:center;gap:8px;padding:5px 4px;cursor:pointer;border-radius:3px;font-size:12px;
+}
+.catoption:hover{background:var(--panel);}
+.catoption .dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.catoption.active{font-weight:700;}
+.newcatrow{display:flex;gap:6px;margin-top:8px;border-top:1px solid var(--line-soft);padding-top:8px;}
+.newcatrow input{flex:1;font-size:12px;padding:4px 6px;border:1px solid var(--line);border-radius:3px;}
+
+.bar{cursor:grab;}
+.bar:active{cursor:grabbing;}
+
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(22,35,46,0.55);z-index:50;align-items:center;justify-content:center;padding:20px;}
+.modal-overlay.open{display:flex;}
+.modal{background:#fff;border-radius:6px;width:480px;max-width:100%;max-height:85vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,0.3);}
+.modal-header{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--line-soft);background:var(--panel);position:sticky;top:0;}
+.modal-name-input{flex:1;font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:600;border:1px solid transparent;padding:4px 6px;border-radius:3px;background:transparent;color:var(--ink);}
+.modal-name-input:hover,.modal-name-input:focus{border-color:var(--line);background:#fff;}
+.modal-body{padding:16px;display:flex;flex-direction:column;gap:14px;}
+.modal-row{display:flex;gap:12px;flex-wrap:wrap;}
+.modal-row .field{flex:1;min-width:110px;}
+.modal-row .field input,.modal-row .field select{width:100%;}
+.modal-readonly{font-size:13px;padding:6px 8px;background:var(--panel);border-radius:3px;color:var(--ink-soft);}
+.modal-deps{max-height:220px;overflow:auto;border:1px solid var(--line-soft);border-radius:4px;padding:8px;}
+.modal-deps .deprow{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;}
+.modal-deps .deprow label{flex:1;display:flex;align-items:center;gap:8px;cursor:pointer;}
+.modal-footer{display:flex;justify-content:space-between;padding:12px 16px;border-top:1px solid var(--line-soft);}
+
+#loading{padding:40px;text-align:center;color:var(--ink-soft);font-size:14px;}
+#cycwarn{background:var(--critical-soft);color:#7A3413;padding:8px 18px;font-size:12px;border-bottom:1px solid var(--critical);display:none;}
+
+.print-only{display:none;}
+.print-table{width:100%;border-collapse:collapse;font-family:'Work Sans',sans-serif;font-size:12px;}
+.print-table th,.print-table td{border:1px solid #999;padding:5px 8px;text-align:left;}
+.print-table thead{display:table-header-group;background:#EEE;}
+.print-cat-row td{background:#EAE3D2;font-weight:700;}
+.print-meta{font-size:12px;color:#555;margin-bottom:10px;}
+.print-title{font-family:'Barlow Condensed',sans-serif;margin-bottom:2px;}
+
+@media print{
+  #topbar, #addrow, .legend, #cycwarn, .modal-overlay { display:none !important; }
+  body{ background:#fff; }
+  #app{ height:auto; }
+  #body{ overflow:visible !important; height:auto !important; display:block !important; }
+  @page { size: landscape; margin: 10mm; }
+  body.printing-list #body{ display:none !important; }
+  body.printing-list .print-only{ display:block; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <div class="brand">Site Schedule</div>
+    <label>Project</label>
+    <select id="projectSelect"></select>
+    <button id="newProjectBtn" title="New project">+ Project</button>
+    <label>Start</label>
+    <input type="date" id="startDate">
+    <div class="zoomgroup">
+      <button id="zoomDay">Day</button>
+      <button id="zoomWeek">Week</button>
+    </div>
+    <button id="rollupAllBtn">Roll Up All</button>
+    <div style="position:relative;display:inline-block;">
+      <button id="printBtn">Print ▾</button>
+      <div class="popover" id="printMenu" style="display:none;top:36px;left:0;width:220px;">
+        <div class="catoption" id="printGanttOpt">🖨 Gantt chart (scaled to fit page)</div>
+        <div class="catoption" id="printListOpt">🖨 Task list with dates</div>
+      </div>
+    </div>
+    <button id="saveFileBtn" title="Download this project as a file">Save to PC</button>
+    <button id="loadFileBtn" title="Load a project file from your computer">Load from PC</button>
+    <input type="file" id="loadFileInput" accept="application/json" style="display:none;">
+    <div class="grow"></div>
+    <div id="projFinish"></div>
+    <div id="accountBox" style="font-size:12px;color:#CFE0E8;display:flex;align-items:center;gap:8px;">
+      <span id="accountEmail"></span>
+      <button id="signOutBtn">Sign out</button>
+    </div>
+  </div>
+  <div id="cycwarn">Circular dependency detected — some tasks couldn't be scheduled against each other. Check dependency links.</div>
+  <div id="loading">Loading schedule…</div>
+  <div id="body" style="display:none;">
+    <div id="printScaleWrap"><div id="gridwrap"></div></div>
+    <div id="addrow">
+      <button class="addtoggle" id="addToggleBtn">+ Add task</button>
+      <button class="addtoggle" id="addCatBtn">+ Add category</button>
+      <div class="addform" id="addForm" style="bottom:44px;">
+        <div class="field">
+          <label>Task name</label>
+          <input type="text" id="newName" placeholder="e.g. Roofing">
+        </div>
+        <div class="field">
+          <label>Category</label>
+          <select id="newCategory"></select>
+        </div>
+        <div class="field">
+          <label>Duration (days)</label>
+          <input type="number" id="newDuration" value="14" min="1" style="width:70px;">
+        </div>
+        <div class="field">
+          <label>% Complete</label>
+          <input type="number" id="newPercent" value="0" min="0" max="100" style="width:60px;">
+        </div>
+        <div class="field" id="newStartField">
+          <label>Start date</label>
+          <input type="date" id="newStart">
+        </div>
+        <div class="field">
+          <label>Depends on</label>
+          <div class="depchecks" id="newDeps"></div>
+        </div>
+        <button class="primarybtn" id="saveNewBtn">Add task</button>
+        <button class="ghostbtn" id="cancelNewBtn">Cancel</button>
+      </div>
+    </div>
+    <div class="legend" id="legend"></div>
+  </div>
+  <div id="printListWrap" class="print-only"></div>
+  <div class="modal-overlay" id="aiGenOverlay">
+    <div class="modal" style="width:460px;">
+      <div class="modal-header">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:600;flex:1;">Generate schedule with AI</div>
+        <button class="rowbtn" id="aiGenClose" title="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="font-size:12px;color:var(--ink-soft);">Describe the project — size, type, location, anything relevant — and Claude will draft a phased task list with realistic durations and dependencies. You can edit everything afterward.</div>
+        <textarea id="aiGenDesc" rows="4" style="width:100%;font:inherit;font-size:13px;padding:8px;border:1px solid var(--line);border-radius:3px;resize:vertical;" placeholder="e.g. 120-room Hilton Garden Inn, new ground-up construction, 4 stories, wood-frame over a podium slab, Atlanta GA, targeting a 14-month schedule"></textarea>
+        <div>
+          <button class="ghostbtn" id="aiGenAttachBtn" type="button">+ Attach plans (PDF or images)</button>
+          <input type="file" id="aiGenFileInput" accept="application/pdf,image/png,image/jpeg,image/webp" multiple style="display:none;">
+          <div id="aiGenFileList" style="display:flex;flex-direction:column;gap:4px;margin-top:6px;"></div>
+        </div>
+        <div id="aiGenStatus" style="font-size:12px;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="ghostbtn" id="aiGenCancel">Cancel</button>
+        <button class="primarybtn" id="aiGenSubmit">Generate</button>
+      </div>
+    </div>
+  </div>
+  <div class="modal-overlay" id="dialogOverlay">
+    <div class="modal" style="width:380px;">
+      <div class="modal-header">
+        <div id="dialogTitle" style="font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:600;flex:1;"></div>
+        <button class="rowbtn" id="dialogClose" title="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="dialogMessage" style="font-size:13px;color:var(--ink-soft);white-space:pre-line;"></div>
+        <input type="text" id="dialogInput" style="display:none;padding:8px;border:1px solid var(--line);border-radius:3px;font:inherit;">
+      </div>
+      <div class="modal-footer" id="dialogButtons" style="justify-content:flex-end;gap:8px;flex-wrap:wrap;"></div>
+    </div>
+  </div>
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+      <div class="modal-header">
+        <input type="text" id="modalName" class="modal-name-input">
+        <button class="rowbtn" id="modalClose" title="Close">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-row">
+          <div class="field"><label>Category</label><select id="modalCategory"></select></div>
+          <div class="field"><label>Duration (days)</label><input type="number" id="modalDuration" min="1"></div>
+          <div class="field"><label>% Complete</label><input type="number" id="modalPercent" min="0" max="100"></div>
+        </div>
+        <div class="modal-row" id="modalStartRow"></div>
+        <div class="field">
+          <label>Depends on</label>
+          <div id="modalDeps" class="modal-deps"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="ghostbtn" id="modalDeleteBtn">Delete task</button>
+        <button class="primarybtn" id="modalDoneBtn">Done</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="authScreen" style="display:none;position:fixed;inset:0;background:var(--ink);align-items:center;justify-content:center;z-index:100;">
+  <div class="modal" style="width:340px;">
+    <div class="modal-header">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:600;flex:1;">Site Schedule</div>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--ink-soft);">Sign in to sync your schedules across devices.</div>
+      <input type="email" id="authEmail" placeholder="Email" autocomplete="email" style="padding:8px;border:1px solid var(--line);border-radius:3px;font:inherit;">
+      <input type="password" id="authPassword" placeholder="Password" autocomplete="current-password" style="padding:8px;border:1px solid var(--line);border-radius:3px;font:inherit;">
+      <div id="authError" style="color:var(--critical);font-size:12px;min-height:14px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="ghostbtn" id="authSignUpBtn">Create account</button>
+      <button class="primarybtn" id="authSignInBtn">Sign in</button>
+    </div>
+    <div style="padding:0 16px 16px;display:flex;align-items:center;gap:10px;color:var(--ink-soft);font-size:11px;">
+      <div style="flex:1;height:1px;background:var(--line-soft);"></div>or<div style="flex:1;height:1px;background:var(--line-soft);"></div>
+    </div>
+    <div style="padding:0 16px 16px;">
+      <button class="ghostbtn" id="authGoogleBtn" style="width:100%;">Sign in with Google</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
+  import {
+    getAuth, onAuthStateChanged, signInWithEmailAndPassword,
+    createUserWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithPopup
+  } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
+  import {
+    getFirestore, doc, getDoc, setDoc, collection, getDocs
+  } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDI7q6QAcm-63RVcmTXLPBqZFekMCNW1aw",
+    authDomain: "pcg-schedules.firebaseapp.com",
+    projectId: "pcg-schedules",
+    storageBucket: "pcg-schedules.firebasestorage.app",
+    messagingSenderId: "150352946639",
+    appId: "1:150352946639:web:307eaeeecba650a3429eba"
+  };
+
+  const fbApp = initializeApp(firebaseConfig);
+  const auth = getAuth(fbApp);
+  const db = getFirestore(fbApp);
+  const googleProvider = new GoogleAuthProvider();
+
+  window.__fb = {
+    auth, db, doc, getDoc, setDoc, collection, getDocs,
+    signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged,
+    signInWithPopup, googleProvider
+  };
+  window.dispatchEvent(new Event('firebase-ready'));
+</script>
+
+<script>
+(function(){
+  function whenFirebaseReady(cb){
+    if(window.__fb) cb(); else window.addEventListener('firebase-ready', cb, {once:true});
+  }
+  const PALETTE = ['#2C5F7C','#3E7C8C','#5A8F72','#8A8F5A','#A87A4A','#8C6E54','#6E5A7C','#4F6E8C','#B2703A','#5A7C6E','#3E5A7C','#7C5A46'];
+
+  // Set this to your Wix Velo backend function URL (e.g. "https://yourdomain.com/_functions/generateSchedule")
+  // once you've set one up, so AI-generate works outside Claude.ai. Leave null to call Anthropic
+  // directly — that only works while this page is running inside Claude.ai's artifact preview.
+  const AI_PROXY_URL = null;
+  const DAY_MS = 86400000;
+  const ROW_H = 46;
+  const SIDEBAR_W = 310;
+  const UNCATEGORIZED = 'Uncategorized';
+
+  let projectList = [];
+  let activeProject = null;
+  let startDateStr = null;
+  let tasks = [];
+  let categoryOrder = [];
+  let collapsedCategories = [];
+  let zoom = 'week';
+  let editingTaskId = null;
+  let editingCategory = null;
+  let currentUid = null;
+  let openCatPopoverId = null; // task id whose category popover is open
+  let openModalId = null; // task id whose detail modal is open
+
+  const el = id => document.getElementById(id);
+
+  // ---------- storage helpers (Firestore: synced per signed-in user across devices) ----------
+  function projectsCol(){
+    return window.__fb.collection(window.__fb.db, 'users', currentUid, 'projects');
+  }
+  function projectDocRef(name){
+    return window.__fb.doc(window.__fb.db, 'users', currentUid, 'projects', name);
+  }
+  async function loadProjectList(){
+    try{
+      const snap = await window.__fb.getDocs(projectsCol());
+      const names=[]; snap.forEach(d=>names.push(d.id));
+      return names;
+    }catch(e){ console.error(e); return []; }
+  }
+  function saveProjectList(list){
+    // no-op: with Firestore, the project list is just "which documents exist" —
+    // saveProject() below is what actually creates/updates a project doc.
+  }
+  async function loadProject(name){
+    try{
+      const snap = await window.__fb.getDoc(projectDocRef(name));
+      return snap.exists() ? snap.data() : null;
+    }catch(e){ console.error(e); return null; }
+  }
+  async function saveProject(name, data){
+    try{ await window.__fb.setDoc(projectDocRef(name), data); }
+    catch(e){ console.error(e); }
+  }
+
+  function templateTasks(){
+    const t = (id,name,duration,deps,category)=>({id,name,duration,deps,startOffset:0,category,percent:0});
+    const d = (id,lag)=>({id,lag:lag||0});
+    return [
+      t('t1','Permitting & Approvals',21,[],'Preconstruction'),
+      t('t2','Site Work & Excavation',14,[d('t1')],'Sitework & Foundation'),
+      t('t3','Foundation',21,[d('t2')],'Sitework & Foundation'),
+      t('t4','Structural Framing',35,[d('t3',5)],'Structural'), // 5-day concrete cure lag
+      t('t5','Building Envelope (Roof & Windows)',28,[d('t4')],'Envelope & MEP'),
+      t('t6','MEP Rough-In',30,[d('t4',-7)],'Envelope & MEP'), // 7-day lead overlap
+      t('t7','Elevators & Vertical Transport',25,[d('t4')],'Structural'),
+      t('t8','Insulation & Drywall',21,[d('t5'),d('t6')],'Interior Finishes'),
+      t('t9','Interior Finishes',35,[d('t8')],'Interior Finishes'),
+      t('t10','FF&E Installation',21,[d('t9')],'Interior Finishes'),
+      t('t11','Final Inspections & Punch List',14,[d('t10'),d('t7')],'Closeout'),
+      t('t12','Certificate of Occupancy',5,[d('t11')],'Closeout'),
+    ];
+  }
+  function templateCategories(){
+    return ['Preconstruction','Sitework & Foundation','Structural','Envelope & MEP','Interior Finishes','Closeout'];
+  }
+
+  function normalizeDep(d){
+    return (typeof d==='string') ? {id:d, lag:0} : {id:d.id, lag:d.lag||0};
+  }
+
+  function pad2(n){ return String(n).padStart(2,'0'); }
+  function isoDate(d){ return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()); }
+  function todayStr(){ return isoDate(new Date()); }
+  function newId(){ return 'x'+Math.random().toString(36).slice(2,9); }
+
+  function categoryColor(cat){
+    const i = categoryOrder.indexOf(cat);
+    if(i===-1) return '#8A8F94';
+    return PALETTE[i % PALETTE.length];
+  }
+
+  // ---------- CPM scheduling ----------
+  function computeSchedule(){
+    const map = {};
+    tasks.forEach(t=>map[t.id]=t);
+    const ES={}, EF={}, LS={}, LF={};
+    const visited={}, visiting={};
+    let hasCycle=false;
+    const order=[];
+
+    function visit(id){
+      if(visited[id]) return;
+      if(visiting[id]){ hasCycle=true; return; }
+      visiting[id]=true;
+      const t=map[id];
+      if(t){ (t.deps||[]).map(normalizeDep).forEach(d=>{ if(map[d.id]) visit(d.id); }); }
+      visiting[id]=false; visited[id]=true; order.push(id);
+    }
+    tasks.forEach(t=>visit(t.id));
+
+    order.forEach(id=>{
+      const t=map[id]; if(!t) return;
+      const deps=(t.deps||[]).map(normalizeDep).filter(d=>map[d.id] && EF[d.id]!==undefined);
+      if(deps.length){
+        ES[id]=Math.max(...deps.map(d=>EF[d.id]+d.lag));
+      } else {
+        ES[id]=t.startOffset||0;
+      }
+      EF[id]=ES[id]+Math.max(1,t.duration);
+    });
+
+    const finish = Math.max(0,...Object.values(EF));
+    const successors={};
+    tasks.forEach(t=>(t.deps||[]).map(normalizeDep).forEach(d=>{
+      if(!successors[d.id]) successors[d.id]=[];
+      successors[d.id].push({id:t.id, lag:d.lag});
+    }));
+
+    [...order].reverse().forEach(id=>{
+      const t=map[id]; if(!t) return;
+      const succ=(successors[id]||[]).filter(s=>LS[s.id]!==undefined);
+      LF[id]= succ.length? Math.min(...succ.map(s=>LS[s.id]-s.lag)) : finish;
+      LS[id]= LF[id]-Math.max(1,t.duration);
+    });
+
+    const result={};
+    tasks.forEach(t=>{
+      const slack=(LS[t.id]!==undefined && ES[t.id]!==undefined)? LS[t.id]-ES[t.id] : 0;
+      result[t.id]={ES:ES[t.id]||0, EF:EF[t.id]||0, LS:LS[t.id]||0, LF:LF[t.id]||0, slack, critical: slack<=0};
+    });
+    return {result, finish, hasCycle};
+  }
+
+  function addDays(dateStr,n){
+    const d=new Date(dateStr+'T00:00:00');
+    d.setDate(d.getDate()+n);
+    return d;
+  }
+  function fmtDate(d){ return d.toLocaleDateString('en-US',{month:'short',day:'numeric'}); }
+
+  // ---------- category grouping ----------
+  function buildVisibleRows(){
+    const rows=[];
+    const known = new Set();
+    categoryOrder.forEach(cat=>{
+      const members = tasks.filter(t=>(t.category||UNCATEGORIZED)===cat);
+      known.add(cat);
+      if(members.length===0 && !categoryOrder.includes(cat)) return;
+      if(members.length===0) { rows.push({type:'category', name:cat, members}); return; }
+      rows.push({type:'category', name:cat, members});
+      if(!collapsedCategories.includes(cat)) members.forEach(t=>rows.push({type:'task', task:t}));
+    });
+    const orphans = tasks.filter(t=>!known.has(t.category||UNCATEGORIZED));
+    if(orphans.length){
+      rows.push({type:'category', name:UNCATEGORIZED, members:orphans});
+      if(!collapsedCategories.includes(UNCATEGORIZED)) orphans.forEach(t=>rows.push({type:'task', task:t}));
+    }
+    return rows;
+  }
+
+  function categoryRollup(members, result){
+    if(!members.length) return {es:0,ef:0,percent:0};
+    const ess = members.map(t=>(result[t.id]?result[t.id].ES:0));
+    const efs = members.map(t=>(result[t.id]?result[t.id].EF:0));
+    const totalDur = members.reduce((s,t)=>s+t.duration,0)||1;
+    const weighted = members.reduce((s,t)=>s+t.duration*(t.percent||0),0);
+    return {es:Math.min(...ess), ef:Math.max(...efs), percent:Math.round(weighted/totalDur)};
+  }
+
+  // full task listing ignoring collapsed state — used for printed reports
+  function buildFullRows(){
+    const rows=[]; const known=new Set();
+    categoryOrder.forEach(cat=>{
+      const members = tasks.filter(t=>(t.category||UNCATEGORIZED)===cat);
+      known.add(cat);
+      rows.push({type:'category', name:cat, members});
+      members.forEach(t=>rows.push({type:'task', task:t}));
+    });
+    const orphans = tasks.filter(t=>!known.has(t.category||UNCATEGORIZED));
+    if(orphans.length){
+      rows.push({type:'category', name:UNCATEGORIZED, members:orphans});
+      orphans.forEach(t=>rows.push({type:'task', task:t}));
+    }
+    return rows;
+  }
+
+  // ---------- rendering ----------
+  function pxPerDay(){ return zoom==='day' ? 34 : 12; }
+
+  function render(){
+    if(!activeProject){ return; }
+    const {result, finish, hasCycle} = computeSchedule();
+    el('cycwarn').style.display = hasCycle ? 'block' : 'none';
+
+    const ppd = pxPerDay();
+    const totalDays = Math.max(finish+10, 30);
+    const chartWidth = totalDays*ppd;
+
+    el('projFinish').innerHTML = tasks.length
+      ? `Est. completion: <b>${fmtDate(addDays(startDateStr,finish))}</b> · ${finish} days`
+      : '';
+    el('zoomDay').className = zoom==='day' ? 'active' : '';
+    el('zoomWeek').className = zoom==='week' ? 'active' : '';
+    el('rollupAllBtn').textContent = (categoryOrder.length>0 && categoryOrder.every(c=>collapsedCategories.includes(c))) ? 'Expand All' : 'Roll Up All';
+
+    const gridwrap = el('gridwrap');
+    gridwrap.innerHTML='';
+    gridwrap.style.width = (SIDEBAR_W+chartWidth)+'px';
+
+    // header row
+    const headerRow = document.createElement('div');
+    headerRow.className='row header-row';
+    const hsb = document.createElement('div');
+    hsb.className='sidebar-cell';
+    hsb.innerHTML = `<div class="taskname" style="font-family:'Barlow Condensed';font-size:15px;font-weight:600;color:#fff;">Task</div>`;
+    headerRow.appendChild(hsb);
+    const hchart = document.createElement('div');
+    hchart.className='chart-cell dateheader';
+    hchart.style.width=chartWidth+'px';
+    hchart.style.background='var(--ink)';
+    hchart.style.height='44px';
+    const monthsDiv = document.createElement('div'); monthsDiv.style.position='relative'; monthsDiv.style.height='20px';
+    let curMonth=null, monthStartX=0;
+    for(let d=0; d<=totalDays; d++){
+      const date = addDays(startDateStr,d);
+      const mLabel = date.toLocaleDateString('en-US',{month:'short',year:'2-digit'});
+      if(mLabel!==curMonth){
+        if(curMonth!==null){
+          const lbl=document.createElement('div');
+          lbl.className='monthlabel'; lbl.style.left=monthStartX+'px'; lbl.textContent=curMonth;
+          monthsDiv.appendChild(lbl);
+        }
+        curMonth=mLabel; monthStartX=d*ppd;
+      }
+    }
+    const lastLbl=document.createElement('div');
+    lastLbl.className='monthlabel'; lastLbl.style.left=monthStartX+'px'; lastLbl.textContent=curMonth;
+    monthsDiv.appendChild(lastLbl);
+    hchart.appendChild(monthsDiv);
+
+    const ticksDiv=document.createElement('div'); ticksDiv.style.position='relative'; ticksDiv.style.height='24px';
+    const step = zoom==='day'?1:7;
+    for(let d=0; d<=totalDays; d+=step){
+      const date=addDays(startDateStr,d);
+      const tl=document.createElement('div');
+      tl.className='ticklabel'; tl.style.left=(d*ppd)+'px';
+      tl.textContent = zoom==='day' ? date.getDate() : date.toLocaleDateString('en-US',{month:'numeric',day:'numeric'});
+      ticksDiv.appendChild(tl);
+    }
+    hchart.appendChild(ticksDiv);
+    headerRow.appendChild(hchart);
+    gridwrap.appendChild(headerRow);
+
+    // ---- build visible rows (categories + their tasks) ----
+    const visibleRows = buildVisibleRows();
+    const idxOfTaskId = {};
+    visibleRows.forEach((r,i)=>{ if(r.type==='task') idxOfTaskId[r.task.id]=i; });
+
+    function drawBackground(cc){
+      for(let d=0; d<totalDays; d++){
+        const date=addDays(startDateStr,d);
+        const day=date.getDay();
+        if(day===0||day===6){
+          const band=document.createElement('div');
+          band.className='weekendband'; band.style.left=(d*ppd)+'px'; band.style.width=ppd+'px';
+          cc.appendChild(band);
+        }
+      }
+      for(let d=0; d<=totalDays; d+= (zoom==='day'?1:7)){
+        const gl=document.createElement('div');
+        gl.className='gridline'+((zoom==='week')?' week':'');
+        gl.style.left=(d*ppd)+'px';
+        cc.appendChild(gl);
+      }
+      const todayOffset = Math.floor((new Date(todayStr()+'T00:00:00') - new Date(startDateStr+'T00:00:00'))/DAY_MS);
+      if(todayOffset>=0 && todayOffset<=totalDays){
+        const tline=document.createElement('div');
+        tline.className='todayline'; tline.style.left=(todayOffset*ppd)+'px';
+        cc.appendChild(tline);
+      }
+    }
+
+    visibleRows.forEach((rowData,idx)=>{
+      const row=document.createElement('div');
+
+      if(rowData.type==='category'){
+        const cat = rowData.name;
+        const members = rowData.members;
+        const collapsed = collapsedCategories.includes(cat);
+        row.className='row category-row';
+
+        const sb=document.createElement('div');
+        sb.className='sidebar-cell';
+
+        const toggle=document.createElement('button');
+        toggle.className='collapsebtn';
+        toggle.textContent = collapsed ? '▶' : '▼';
+        toggle.onclick=()=>{
+          if(collapsed) collapsedCategories=collapsedCategories.filter(c=>c!==cat);
+          else collapsedCategories.push(cat);
+          persist(); render();
+        };
+        sb.appendChild(toggle);
+
+        const dot=document.createElement('div');
+        dot.style.width='10px'; dot.style.height='10px'; dot.style.borderRadius='50%'; dot.style.flexShrink='0';
+        dot.style.background = cat===UNCATEGORIZED ? '#8A8F94' : categoryColor(cat);
+        sb.appendChild(dot);
+
+        const nameWrap=document.createElement('div');
+        nameWrap.className='catname';
+        if(editingCategory===cat && cat!==UNCATEGORIZED){
+          nameWrap.innerHTML = `<input type="text" id="editCatInput" value="${escapeHtml(cat)}">`;
+        } else {
+          nameWrap.innerHTML = `${escapeHtml(cat)}<span class="catcount">(${members.length})</span>`;
+          if(cat!==UNCATEGORIZED){
+            nameWrap.onclick=()=>{ editingCategory=cat; render(); setTimeout(()=>{const i=el('editCatInput'); if(i){i.focus(); i.select();}},0); };
+          }
+        }
+        sb.appendChild(nameWrap);
+
+        const rollup = categoryRollup(members, result);
+        const pctBadge=document.createElement('div');
+        pctBadge.className='catpct'; pctBadge.textContent = members.length ? rollup.percent+'%' : '';
+        sb.appendChild(pctBadge);
+
+        if(cat!==UNCATEGORIZED){
+          const delBtn=document.createElement('button');
+          delBtn.className='rowbtn'; delBtn.title='Delete category';
+          delBtn.textContent = rowData._confirm ? 'Confirm?' : '✕';
+          delBtn.style.color = rowData._confirm ? 'var(--critical)' : '';
+          delBtn.onclick=()=>{
+            if(rowData._confirm){
+              categoryOrder = categoryOrder.filter(c=>c!==cat);
+              collapsedCategories = collapsedCategories.filter(c=>c!==cat);
+              tasks.forEach(t=>{ if((t.category||UNCATEGORIZED)===cat) t.category=UNCATEGORIZED; });
+              persist(); render();
+            } else { rowData._confirm=true; render(); setTimeout(()=>{rowData._confirm=false;},3000); }
+          };
+          sb.appendChild(delBtn);
+        }
+
+        row.appendChild(sb);
+
+        const cc=document.createElement('div');
+        cc.className='chart-cell'; cc.style.width=chartWidth+'px'; cc.style.height=ROW_H+'px';
+        drawBackground(cc);
+
+        if(members.length){
+          const cbar=document.createElement('div');
+          cbar.className='catbar';
+          cbar.style.left=(rollup.es*ppd)+'px';
+          cbar.style.width=Math.max(4,((rollup.ef-rollup.es)*ppd))+'px';
+          const fill=document.createElement('div');
+          fill.className='fill'; fill.style.width=Math.min(100,Math.max(0,rollup.percent))+'%';
+          cbar.appendChild(fill);
+          const lbl=document.createElement('div');
+          lbl.className='lbl'; lbl.textContent=`${fmtDate(addDays(startDateStr,rollup.es))} – ${fmtDate(addDays(startDateStr,rollup.ef))}`;
+          cbar.appendChild(lbl);
+          cc.appendChild(cbar);
+        }
+        row.appendChild(cc);
+        gridwrap.appendChild(row);
+        return;
+      }
+
+      // ---- task row ----
+      const t = rowData.task;
+      const r = result[t.id]||{ES:0,EF:0,critical:false,slack:0};
+      row.className='row';
+
+      const sb=document.createElement('div');
+      sb.className='sidebar-cell';
+      sb.style.paddingLeft='22px';
+
+      const nameWrap=document.createElement('div');
+      nameWrap.className='taskname'+(editingTaskId===t.id?' editing':'');
+      if(editingTaskId===t.id){
+        nameWrap.innerHTML = `<input type="text" id="editNameInput" value="${escapeHtml(t.name)}">`;
+      } else {
+        nameWrap.textContent = t.name;
+        nameWrap.onclick=()=>{ editingTaskId=t.id; render(); setTimeout(()=>{const i=el('editNameInput'); if(i){i.focus(); i.select();}},0); };
+      }
+      sb.appendChild(nameWrap);
+
+      const dur=document.createElement('input');
+      dur.type='number'; dur.className='numinput'; dur.value=t.duration; dur.min=1; dur.title='Duration (days)';
+      dur.onchange=(e)=>{ t.duration=Math.max(1,parseInt(e.target.value)||1); persist(); render(); };
+      sb.appendChild(dur);
+
+      const pct=document.createElement('input');
+      pct.type='number'; pct.className='numinput'; pct.value=t.percent||0; pct.min=0; pct.max=100; pct.title='% complete';
+      pct.onchange=(e)=>{ t.percent=Math.min(100,Math.max(0,parseInt(e.target.value)||0)); persist(); render(); };
+      sb.appendChild(pct);
+
+      const catBtn=document.createElement('button');
+      catBtn.className='catbtn';
+      catBtn.style.background = categoryColor(t.category||UNCATEGORIZED);
+      catBtn.title='Category: '+(t.category||UNCATEGORIZED);
+      catBtn.textContent = (t.category||UNCATEGORIZED).slice(0,2);
+      catBtn.onclick=(e)=>{ e.stopPropagation(); openCatPopoverId = openCatPopoverId===t.id?null:t.id; render(); };
+      sb.appendChild(catBtn);
+
+      const detailsBtn=document.createElement('button');
+      detailsBtn.className='rowbtn'; detailsBtn.title='Open task details'; detailsBtn.textContent='▤';
+      detailsBtn.onclick=(e)=>{ e.stopPropagation(); openModal(t.id); };
+      sb.appendChild(detailsBtn);
+
+      const delBtn=document.createElement('button');
+      delBtn.className='rowbtn'; delBtn.title='Delete';
+      delBtn.textContent = t._confirm ? 'Confirm?' : '✕';
+      delBtn.style.color = t._confirm ? 'var(--critical)' : '';
+      delBtn.onclick=(e)=>{ e.stopPropagation();
+        if(t._confirm){ tasks=tasks.filter(x=>x.id!==t.id); tasks.forEach(x=>x.deps=(x.deps||[]).map(normalizeDep).filter(d=>d.id!==t.id)); persist(); render(); }
+        else { t._confirm=true; render(); setTimeout(()=>{t._confirm=false;},3000); }
+      };
+      sb.appendChild(delBtn);
+
+      if(openCatPopoverId===t.id){
+        const pop=document.createElement('div');
+        pop.className='popover'; pop.style.top=(idx*ROW_H+44+30)+'px'; pop.style.left='20px';
+        pop.innerHTML=`<h4>Category</h4>`;
+        categoryOrder.forEach(cat=>{
+          const opt=document.createElement('div');
+          opt.className='catoption'+((t.category||UNCATEGORIZED)===cat?' active':'');
+          opt.innerHTML=`<span class="dot" style="background:${categoryColor(cat)}"></span>${escapeHtml(cat)}`;
+          opt.onclick=()=>{ t.category=cat; openCatPopoverId=null; persist(); render(); };
+          pop.appendChild(opt);
+        });
+        const newRow=document.createElement('div');
+        newRow.className='newcatrow';
+        const input=document.createElement('input'); input.type='text'; input.placeholder='New category…';
+        const addBtn=document.createElement('button'); addBtn.className='ghostbtn'; addBtn.textContent='Add';
+        addBtn.onclick=()=>{
+          const name=input.value.trim();
+          if(!name) return;
+          if(!categoryOrder.includes(name)) categoryOrder.push(name);
+          t.category=name; openCatPopoverId=null; persist(); render();
+        };
+        newRow.appendChild(input); newRow.appendChild(addBtn);
+        pop.appendChild(newRow);
+        sb.appendChild(pop);
+      }
+
+      row.appendChild(sb);
+
+      const cc=document.createElement('div');
+      cc.className='chart-cell'; cc.style.width=chartWidth+'px'; cc.style.height=ROW_H+'px';
+      drawBackground(cc);
+
+      const bar=document.createElement('div');
+      bar.className='bar'+(r.critical?' critical':'');
+      bar.style.left=(r.ES*ppd)+'px';
+      bar.style.width=Math.max(4,(t.duration*ppd))+'px';
+      bar.style.background=r.critical?'var(--critical)':categoryColor(t.category||UNCATEGORIZED);
+      const fill=document.createElement('div');
+      fill.className='fill'; fill.style.width=Math.min(100,Math.max(0,t.percent||0))+'%';
+      bar.appendChild(fill);
+      const lbl=document.createElement('div');
+      lbl.className='lbl';
+      lbl.textContent = ppd*t.duration>60 ? `${t.duration}d · ${t.percent||0}%` : '';
+      bar.appendChild(lbl);
+      bar.title=`${t.name}\n${fmtDate(addDays(startDateStr,r.ES))} → ${fmtDate(addDays(startDateStr,r.EF))}\n${r.critical?'Critical path':'Slack: '+r.slack+'d'}\n${t.percent||0}% complete\nDrag to reschedule · click to open details`;
+      cc.appendChild(bar);
+
+      // drag to reschedule, click (no drag) to open details
+      bar.addEventListener('pointerdown',(e)=>{
+        e.preventDefault();
+        const startX = e.clientX;
+        let dragged=false;
+        bar.setPointerCapture(e.pointerId);
+        function onMove(ev){
+          const dx = ev.clientX-startX;
+          if(Math.abs(dx)>4) dragged=true;
+          bar.style.transform = `translateX(${dx}px)`;
+        }
+        function onUp(ev){
+          bar.removeEventListener('pointermove',onMove);
+          bar.removeEventListener('pointerup',onUp);
+          bar.style.transform='';
+          const dx = ev.clientX-startX;
+          const deltaDays = Math.round(dx/ppd);
+          if(dragged && deltaDays!==0){
+            const normDeps=(t.deps||[]).map(normalizeDep);
+            if(normDeps.length===0){
+              t.startOffset = (t.startOffset||0)+deltaDays;
+            } else {
+              t.deps = normDeps.map(d=>({id:d.id, lag:d.lag+deltaDays}));
+            }
+            persist(); render();
+          } else if(!dragged){
+            openModal(t.id);
+          }
+        }
+        bar.addEventListener('pointermove',onMove);
+        bar.addEventListener('pointerup',onUp);
+      });
+
+      row.appendChild(cc);
+      gridwrap.appendChild(row);
+    });
+
+    // dependency arrows
+    const svgNS='http://www.w3.org/2000/svg';
+    const svg=document.createElementNS(svgNS,'svg');
+    svg.setAttribute('class','depsvg');
+    svg.setAttribute('width', chartWidth);
+    svg.setAttribute('height', visibleRows.length*ROW_H);
+    svg.style.left=SIDEBAR_W+'px';
+    svg.style.top='44px';
+    const defs=document.createElementNS(svgNS,'defs');
+    const marker=document.createElementNS(svgNS,'marker');
+    marker.setAttribute('id','arrow'); marker.setAttribute('markerWidth','8'); marker.setAttribute('markerHeight','8');
+    marker.setAttribute('refX','6'); marker.setAttribute('refY','3'); marker.setAttribute('orient','auto');
+    const path=document.createElementNS(svgNS,'path');
+    path.setAttribute('d','M0,0 L6,3 L0,6 Z'); path.setAttribute('fill','#7A8896');
+    marker.appendChild(path); defs.appendChild(marker); svg.appendChild(defs);
+
+    tasks.forEach((t)=>{
+      const idx = idxOfTaskId[t.id];
+      if(idx===undefined) return; // hidden (collapsed) task
+      (t.deps||[]).map(normalizeDep).forEach(dep=>{
+        const depIdx = idxOfTaskId[dep.id];
+        if(depIdx===undefined) return;
+        const r1=result[dep.id], r2=result[t.id];
+        if(!r1||!r2) return;
+        const x1=r1.EF*ppd, y1=depIdx*ROW_H+ROW_H/2;
+        const x2=r2.ES*ppd, y2=idx*ROW_H+ROW_H/2;
+        const midX = x1 + Math.max(8,(x2-x1)/2);
+        const d = `M${x1},${y1} L${midX},${y1} L${midX},${y2} L${x2-6},${y2}`;
+        const p=document.createElementNS(svgNS,'path');
+        p.setAttribute('d',d); p.setAttribute('fill','none'); p.setAttribute('stroke','#7A8896');
+        p.setAttribute('stroke-width','1.4'); p.setAttribute('marker-end','url(#arrow)');
+        svg.appendChild(p);
+        if(dep.lag){
+          const lblEl=document.createElementNS(svgNS,'text');
+          lblEl.setAttribute('x', midX+3); lblEl.setAttribute('y', (y1+y2)/2-3);
+          lblEl.setAttribute('font-size','9.5'); lblEl.setAttribute('font-family',"'Work Sans',sans-serif");
+          lblEl.setAttribute('fill', dep.lag>0 ? '#7A5A2A' : '#2C5F7C'); lblEl.setAttribute('font-weight','600');
+          lblEl.textContent = (dep.lag>0?'+':'')+dep.lag+'d';
+          svg.appendChild(lblEl);
+        }
+      });
+    });
+    gridwrap.appendChild(svg);
+
+    // legend
+    const legend = el('legend');
+    let legendHtml = categoryOrder.map(c=>`<span><span class="swatch" style="background:${categoryColor(c)}"></span>${escapeHtml(c)}</span>`).join('');
+    legendHtml += `<span><span class="swatch" style="background:var(--critical)"></span>Critical path</span>`;
+    legendHtml += `<span><span class="swatch" style="background:var(--catbar)"></span>Category rollup</span>`;
+    legendHtml += `<span><span class="swatch" style="background:var(--weekend)"></span>Weekend</span>`;
+    legend.innerHTML = legendHtml;
+
+    // add-form: deps + category options
+    const depWrap = el('newDeps');
+    depWrap.innerHTML='';
+    tasks.forEach(o=>{
+      const lbl=document.createElement('label');
+      const cb=document.createElement('input'); cb.type='checkbox'; cb.value=o.id; cb.className='newdepcb';
+      const lagInput=document.createElement('input');
+      lagInput.type='number'; lagInput.value=0; lagInput.className='newdeplag'; lagInput.dataset.for=o.id;
+      lagInput.title='Lag (+) / lead (-) days'; lagInput.disabled=true;
+      lagInput.style.width='40px'; lagInput.style.fontSize='11px'; lagInput.style.padding='2px 3px';
+      lagInput.style.border='1px solid var(--line)'; lagInput.style.borderRadius='2px'; lagInput.style.marginLeft='2px';
+      cb.onchange=()=>{ lagInput.disabled=!cb.checked; updateNewStartFieldVisibility(); };
+      lbl.appendChild(cb); lbl.appendChild(document.createTextNode(o.name));
+      lbl.appendChild(lagInput);
+      depWrap.appendChild(lbl);
+    });
+
+    const catSel = el('newCategory');
+    const prevVal = catSel.value;
+    catSel.innerHTML='';
+    categoryOrder.forEach(c=>{
+      const opt=document.createElement('option'); opt.value=c; opt.textContent=c;
+      catSel.appendChild(opt);
+    });
+    const newOpt=document.createElement('option'); newOpt.value='__new__'; newOpt.textContent='+ New category…';
+    catSel.appendChild(newOpt);
+    if(categoryOrder.includes(prevVal)) catSel.value=prevVal;
+  }
+
+  function updateNewStartFieldVisibility(){
+    const anyChecked = Array.from(document.querySelectorAll('.newdepcb')).some(cb=>cb.checked);
+    el('newStartField').style.display = anyChecked ? 'none' : 'flex';
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // In-app replacement for prompt()/confirm()/alert() — native dialogs are blocked in sandboxed previews.
+  // buttons: [{label, value, primary?, useInput?}]. Resolves with the clicked button's value,
+  // or the trimmed input text if useInput is set on that button. Closing (X) resolves null.
+  function showDialog({title='', message='', input=false, inputDefault='', buttons=[{label:'OK', value:true, primary:true}]}){
+    return new Promise((resolve)=>{
+      el('dialogTitle').textContent = title;
+      el('dialogMessage').textContent = message;
+      el('dialogMessage').style.display = message ? 'block' : 'none';
+      const inputEl = el('dialogInput');
+      inputEl.style.display = input ? 'block' : 'none';
+      inputEl.value = inputDefault;
+      const btnWrap = el('dialogButtons');
+      btnWrap.innerHTML='';
+      let submitBtn=null;
+      function finish(val){
+        el('dialogOverlay').classList.remove('open');
+        resolve(val);
+      }
+      buttons.forEach(b=>{
+        const btn=document.createElement('button');
+        btn.className = b.primary ? 'primarybtn' : 'ghostbtn';
+        btn.textContent = b.label;
+        btn.onclick = ()=>{ finish(b.useInput ? inputEl.value.trim() : b.value); };
+        if(b.useInput) submitBtn=btn;
+        btnWrap.appendChild(btn);
+      });
+      inputEl.onkeydown = (e)=>{ if(e.key==='Enter' && submitBtn) submitBtn.click(); };
+      el('dialogClose').onclick = ()=>finish(null);
+      el('dialogOverlay').classList.add('open');
+      if(input) setTimeout(()=>{ inputEl.focus(); inputEl.select(); },0);
+    });
+  }
+
+  async function persist(){
+    if(!activeProject) return;
+    await saveProject(activeProject, {
+      startDate: startDateStr,
+      categoryOrder: categoryOrder,
+      collapsedCategories: collapsedCategories,
+      tasks: tasks.map(t=>({id:t.id,name:t.name,duration:t.duration,deps:t.deps,startOffset:t.startOffset,category:t.category||UNCATEGORIZED,percent:t.percent||0}))
+    });
+  }
+
+  // ---------- project switching ----------
+  async function loadActiveProject(name){
+    const data = await loadProject(name);
+    activeProject = name;
+    if(data){
+      startDateStr = data.startDate || todayStr();
+      tasks = data.tasks || [];
+      categoryOrder = (data.categoryOrder && data.categoryOrder.length) ? data.categoryOrder : deriveCategories();
+      collapsedCategories = data.collapsedCategories || [];
+    } else {
+      startDateStr = todayStr();
+      tasks = templateTasks();
+      categoryOrder = templateCategories();
+      collapsedCategories = [];
+      await persist();
+    }
+    el('startDate').value = startDateStr;
+    populateProjectSelect();
+    render();
+  }
+
+  function deriveCategories(){
+    const seen=[];
+    tasks.forEach(t=>{ const c=t.category||UNCATEGORIZED; if(c!==UNCATEGORIZED && !seen.includes(c)) seen.push(c); });
+    return seen;
+  }
+
+  function populateProjectSelect(){
+    const sel = el('projectSelect');
+    sel.innerHTML='';
+    projectList.forEach(n=>{
+      const opt=document.createElement('option'); opt.value=n; opt.textContent=n;
+      if(n===activeProject) opt.selected=true;
+      sel.appendChild(opt);
+    });
+  }
+
+  // ---------- event wiring ----------
+  el('projectSelect').addEventListener('change', async (e)=>{ await loadActiveProject(e.target.value); });
+
+  el('newProjectBtn').addEventListener('click', async ()=>{
+    const name = await showDialog({
+      title:'New project', message:'Enter a name for the new project:', input:true,
+      inputDefault:'Hotel Project '+(projectList.length+1),
+      buttons:[{label:'Cancel', value:null},{label:'Next', value:'go', primary:true, useInput:true}]
+    });
+    if(!name) return;
+    if(projectList.includes(name)){
+      await showDialog({title:'Name already used', message:'A project with that name already exists.', buttons:[{label:'OK', value:true, primary:true}]});
+      return;
+    }
+    const choice = await showDialog({
+      title:'How should this project start?',
+      message:'Pre-load typical hotel construction phases, start blank, or have AI draft one from a description.',
+      buttons:[
+        {label:'Cancel', value:null},
+        {label:'Blank', value:'blank'},
+        {label:'Template', value:'template'},
+        {label:'Generate with AI ✨', value:'ai', primary:true}
+      ]
+    });
+    if(!choice) return;
+    if(choice==='ai'){ openAIGenDialog(name); return; }
+    projectList.push(name);
+    saveProjectList(projectList);
+    const data = choice==='template'
+      ? { startDate: todayStr(), categoryOrder: templateCategories(), collapsedCategories: [], tasks: templateTasks() }
+      : { startDate: todayStr(), categoryOrder: [], collapsedCategories: [], tasks: [] };
+    await saveProject(name, data);
+    await loadActiveProject(name);
+  });
+
+  // ---------- AI schedule generation ----------
+  let aiGenPendingName = null;
+  let aiGenFiles = [];
+
+  function openAIGenDialog(name){
+    aiGenPendingName = name;
+    aiGenFiles = [];
+    el('aiGenDesc').value='';
+    el('aiGenStatus').textContent='';
+    el('aiGenSubmit').disabled=false;
+    renderAIGenFileList();
+    el('aiGenOverlay').classList.add('open');
+    setTimeout(()=>el('aiGenDesc').focus(),0);
+  }
+  function closeAIGenDialog(){ el('aiGenOverlay').classList.remove('open'); aiGenPendingName=null; aiGenFiles=[]; }
+  el('aiGenClose').addEventListener('click', closeAIGenDialog);
+  el('aiGenCancel').addEventListener('click', closeAIGenDialog);
+
+  el('aiGenAttachBtn').addEventListener('click', ()=> el('aiGenFileInput').click());
+  el('aiGenFileInput').addEventListener('change', (e)=>{
+    const files = Array.from(e.target.files||[]);
+    files.forEach(f=>{ if(aiGenFiles.length<5) aiGenFiles.push(f); });
+    e.target.value='';
+    renderAIGenFileList();
+  });
+  function renderAIGenFileList(){
+    const wrap = el('aiGenFileList');
+    wrap.innerHTML='';
+    aiGenFiles.forEach((f,i)=>{
+      const row=document.createElement('div');
+      row.style.cssText='display:flex;align-items:center;gap:6px;font-size:12px;background:var(--panel);border-radius:3px;padding:4px 8px;';
+      const sizeKB = Math.round(f.size/1024);
+      const label=document.createElement('span');
+      label.style.cssText='flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+      label.textContent = `${f.name} (${sizeKB}KB)`;
+      row.appendChild(label);
+      const rm=document.createElement('button'); rm.className='rowbtn'; rm.textContent='✕'; rm.title='Remove';
+      rm.onclick=()=>{ aiGenFiles.splice(i,1); renderAIGenFileList(); };
+      row.appendChild(rm);
+      wrap.appendChild(row);
+    });
+    if(aiGenFiles.length>=5){
+      const note=document.createElement('div');
+      note.style.cssText='font-size:11px;color:var(--ink-soft);';
+      note.textContent='Max 5 files.';
+      wrap.appendChild(note);
+    }
+  }
+
+  function fileToBase64(file){
+    return new Promise((resolve,reject)=>{
+      const reader = new FileReader();
+      reader.onload = ()=> resolve(reader.result.split(',')[1]);
+      reader.onerror = ()=> reject(new Error('read failed'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function generateScheduleWithAI(description, files){
+    const contentBlocks = [];
+    for(const f of (files||[])){
+      const base64 = await fileToBase64(f);
+      if(f.type==='application/pdf'){
+        contentBlocks.push({type:'document', source:{type:'base64', media_type:'application/pdf', data:base64}});
+      } else if(f.type.startsWith('image/')){
+        contentBlocks.push({type:'image', source:{type:'base64', media_type:f.type, data:base64}});
+      }
+    }
+
+    const userPrompt = `Project description: ${description || '(see attached plans)'}
+${files && files.length ? '\nReference the attached plan documents/images — floor plans, elevations, site plan, structural or MEP sheets, whatever is included — to inform scope, unit/room count, number of stories, structural system, and phasing. Let the plans drive specifics the description does not cover.\n' : ''}
+Respond with ONLY valid JSON (no markdown, no code fences, no commentary) matching exactly this shape:
+{
+  "categoryOrder": ["Category Name 1", "Category Name 2"],
+  "tasks": [
+    {
+      "name": "Task name",
+      "category": "Category Name matching one entry in categoryOrder",
+      "duration": 14,
+      "deps": [{"name": "exact name of a prerequisite task", "lag": 0}],
+      "percent": 0
+    }
+  ]
+}
+
+Guidelines:
+- Include 10-14 tasks covering preconstruction through closeout, grouped into 4-5 logical phase categories. Keep it compact — this matters more than covering every possible task.
+- Keep each task "name" short (a few words).
+- Every task's "deps" array should reference other tasks by their exact "name" string. Omit the "deps" key entirely for tasks with no predecessor rather than writing an empty array.
+- Omit "lag" when it is 0 — only include it when nonzero.
+- Use realistic durations in days and realistic lag/lead values in days (e.g. positive lag for concrete cure time, negative lag/lead for trades that can overlap).
+- Return minified JSON only — no markdown, no indentation, no extra whitespace, no commentary.`;
+
+    contentBlocks.push({type:'text', text:userPrompt});
+
+    const response = await fetch(AI_PROXY_URL || "https://api.anthropic.com/v1/messages", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({
+        model:"claude-sonnet-4-6",
+        max_tokens: 1000,
+        system:"You are a construction scheduling assistant. You always respond with a single raw, minified JSON object and nothing else — no markdown, no explanation.",
+        messages:[{role:"user", content: contentBlocks}]
+      })
+    });
+    if(!response.ok) throw new Error('API error '+response.status);
+    const data = await response.json();
+    const textBlocks = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n');
+    const cleaned = textBlocks.replace(/```json|```/g,'').trim();
+    try{
+      return JSON.parse(cleaned);
+    }catch(e){
+      throw new Error('json-parse-failed');
+    }
+  }
+
+  function materializeAIPlan(parsed){
+    const validTasks = (parsed.tasks||[]).filter(t=>t && typeof t.name==='string' && t.name.trim());
+    const nameToId = {};
+    const newTasks = validTasks.map(t=>{
+      const id = newId();
+      nameToId[t.name] = id;
+      return {
+        id, name:t.name.trim(),
+        duration: Math.max(1, parseInt(t.duration)||1),
+        deps: [], startOffset:0,
+        category: (t.category && String(t.category).trim()) || UNCATEGORIZED,
+        percent: Math.min(100, Math.max(0, parseInt(t.percent)||0))
+      };
+    });
+    newTasks.forEach((nt,i)=>{
+      const origDeps = validTasks[i].deps || [];
+      nt.deps = origDeps
+        .filter(d=>d && d.name && nameToId[d.name] && nameToId[d.name]!==nt.id)
+        .map(d=>({id:nameToId[d.name], lag: parseInt(d.lag)||0}));
+    });
+    let categoryOrderOut = Array.isArray(parsed.categoryOrder) ? parsed.categoryOrder.filter(c=>typeof c==='string'&&c.trim()) : [];
+    newTasks.forEach(t=>{ if(!categoryOrderOut.includes(t.category)) categoryOrderOut.push(t.category); });
+    return { tasks:newTasks, categoryOrder:categoryOrderOut };
+  }
+
+  el('aiGenSubmit').addEventListener('click', async ()=>{
+    const desc = el('aiGenDesc').value.trim();
+    if(!desc && aiGenFiles.length===0){
+      el('aiGenStatus').style.color='var(--critical)';
+      el('aiGenStatus').textContent='Add a description or attach at least one plan file.';
+      return;
+    }
+    const totalBytes = aiGenFiles.reduce((s,f)=>s+f.size,0);
+    if(totalBytes > 20*1024*1024){
+      el('aiGenStatus').style.color='var(--critical)';
+      el('aiGenStatus').textContent='Attached files are too large (max ~20MB total). Remove a file or compress your PDF.';
+      return;
+    }
+    el('aiGenSubmit').disabled=true;
+    el('aiGenStatus').style.color='var(--ink-soft)';
+    el('aiGenStatus').textContent='Generating schedule… this can take up to 30 seconds.';
+    try{
+      const parsed = await generateScheduleWithAI(desc, aiGenFiles);
+      const {tasks:newTasks, categoryOrder:newCats} = materializeAIPlan(parsed);
+      if(!newTasks.length) throw new Error('empty plan');
+      const name = aiGenPendingName;
+      projectList.push(name);
+      saveProjectList(projectList);
+      await saveProject(name, { startDate: todayStr(), categoryOrder:newCats, collapsedCategories:[], tasks:newTasks });
+      closeAIGenDialog();
+      await loadActiveProject(name);
+    }catch(err){
+      el('aiGenStatus').style.color='var(--critical)';
+      if(err && err.message==='json-parse-failed'){
+        el('aiGenStatus').textContent="The response got cut off before it finished. Try again, or attach fewer/smaller plan files.";
+      } else if(!AI_PROXY_URL){
+        el('aiGenStatus').textContent="Couldn't reach the AI service. If this page isn't running inside Claude.ai (e.g. it's embedded on Wix), this feature needs a backend proxy with your own API key first — ask Claude to help you set one up.";
+      } else {
+        el('aiGenStatus').textContent='Could not generate a schedule from that. Try a shorter/clearer description or fewer files, or start from Blank/Template instead.';
+      }
+      el('aiGenSubmit').disabled=false;
+    }
+  });
+
+  el('startDate').addEventListener('change',(e)=>{
+    startDateStr = e.target.value || todayStr();
+    persist(); render();
+  });
+
+  el('zoomDay').addEventListener('click',()=>{ zoom='day'; render(); });
+  el('zoomWeek').addEventListener('click',()=>{ zoom='week'; render(); });
+
+  el('addCatBtn').addEventListener('click', async ()=>{
+    const name = await showDialog({
+      title:'New category', input:true,
+      buttons:[{label:'Cancel', value:null},{label:'Add', value:'go', primary:true, useInput:true}]
+    });
+    if(!name) return;
+    if(!categoryOrder.includes(name)) categoryOrder.push(name);
+    persist(); render();
+  });
+
+  el('addToggleBtn').addEventListener('click',()=>{
+    el('addForm').classList.toggle('open');
+    updateNewStartFieldVisibility();
+    el('newStart').value = todayStr();
+  });
+  el('cancelNewBtn').addEventListener('click',()=>{
+    el('addForm').classList.remove('open');
+    el('newName').value=''; el('newDuration').value=14; el('newPercent').value=0;
+  });
+  el('newCategory').addEventListener('change', async (e)=>{
+    if(e.target.value==='__new__'){
+      const name = await showDialog({
+        title:'New category', input:true,
+        buttons:[{label:'Cancel', value:null},{label:'Add', value:'go', primary:true, useInput:true}]
+      });
+      if(name){
+        if(!categoryOrder.includes(name)) categoryOrder.push(name);
+        persist(); render();
+        setTimeout(()=>{ el('newCategory').value=name; },0);
+      } else {
+        e.target.value = categoryOrder[0]||'';
+      }
+    }
+  });
+  el('saveNewBtn').addEventListener('click', async ()=>{
+    const name = el('newName').value.trim();
+    if(!name){ await showDialog({title:'Task name needed', message:'Enter a task name.', buttons:[{label:'OK', value:true, primary:true}]}); return; }
+    const duration = Math.max(1, parseInt(el('newDuration').value)||1);
+    const percent = Math.min(100,Math.max(0, parseInt(el('newPercent').value)||0));
+    const category = el('newCategory').value || UNCATEGORIZED;
+    const deps = Array.from(document.querySelectorAll('.newdepcb')).filter(cb=>cb.checked).map(cb=>{
+      const lagInput = document.querySelector(`.newdeplag[data-for="${cb.value}"]`);
+      return {id:cb.value, lag: lagInput?(parseInt(lagInput.value)||0):0};
+    });
+    let startOffset = 0;
+    if(deps.length===0){
+      const sv = el('newStart').value || todayStr();
+      startOffset = Math.round((new Date(sv+'T00:00:00') - new Date(startDateStr+'T00:00:00'))/DAY_MS);
+    }
+    tasks.push({id:newId(), name, duration, deps, startOffset, category, percent});
+    persist();
+    el('addForm').classList.remove('open');
+    el('newName').value=''; el('newDuration').value=14; el('newPercent').value=0;
+    render();
+  });
+
+  document.addEventListener('keydown',(e)=>{
+    if(editingTaskId && e.key==='Enter'){ commitNameEdit(); }
+    if(editingTaskId && e.key==='Escape'){ editingTaskId=null; render(); }
+    if(editingCategory && e.key==='Enter'){ commitCategoryEdit(); }
+    if(editingCategory && e.key==='Escape'){ editingCategory=null; render(); }
+  });
+  document.addEventListener('click',(e)=>{
+    if(editingTaskId && e.target.id!=='editNameInput' && !e.target.closest('.taskname')){ commitNameEdit(); }
+    if(editingCategory && e.target.id!=='editCatInput' && !e.target.closest('.catname')){ commitCategoryEdit(); }
+    if(openCatPopoverId && !e.target.closest('.popover') && !e.target.closest('.catbtn')){ openCatPopoverId=null; render(); }
+  });
+  function commitNameEdit(){
+    const input = el('editNameInput');
+    if(input){
+      const t = tasks.find(x=>x.id===editingTaskId);
+      if(t){ t.name = input.value.trim()||t.name; persist(); }
+    }
+    editingTaskId=null; render();
+  }
+  function commitCategoryEdit(){
+    const input = el('editCatInput');
+    if(input){
+      const newName = input.value.trim();
+      const oldName = editingCategory;
+      if(newName && newName!==oldName){
+        categoryOrder = categoryOrder.map(c=>c===oldName?newName:c);
+        tasks.forEach(t=>{ if(t.category===oldName) t.category=newName; });
+        if(collapsedCategories.includes(oldName)){
+          collapsedCategories = collapsedCategories.map(c=>c===oldName?newName:c);
+        }
+        persist();
+      }
+    }
+    editingCategory=null; render();
+  }
+
+  // ---------- task detail modal ----------
+  function openModal(id){
+    openModalId = id;
+    renderModal();
+    el('modalOverlay').classList.add('open');
+  }
+  function closeModal(){
+    openModalId = null;
+    el('modalOverlay').classList.remove('open');
+  }
+  function renderModal(){
+    const t = tasks.find(x=>x.id===openModalId);
+    if(!t){ closeModal(); return; }
+    const {result} = computeSchedule();
+    const r = result[t.id]||{ES:0,EF:0};
+
+    el('modalName').value = t.name;
+
+    const catSel = el('modalCategory');
+    catSel.innerHTML='';
+    categoryOrder.forEach(c=>{
+      const opt=document.createElement('option'); opt.value=c; opt.textContent=c;
+      if((t.category||UNCATEGORIZED)===c) opt.selected=true;
+      catSel.appendChild(opt);
+    });
+    const newOpt=document.createElement('option'); newOpt.value='__new__'; newOpt.textContent='+ New category…';
+    catSel.appendChild(newOpt);
+
+    el('modalDuration').value = t.duration;
+    el('modalPercent').value = t.percent||0;
+
+    const normDeps=(t.deps||[]).map(normalizeDep);
+    const startRow = el('modalStartRow');
+    if(normDeps.length===0){
+      startRow.innerHTML = `<div class="field"><label>Start date</label><input type="date" id="modalStart"></div>
+        <div class="field"><label>Finish (computed)</label><div class="modal-readonly" id="modalFinish"></div></div>`;
+      el('modalStart').value = isoDate(addDays(startDateStr, t.startOffset||0));
+      el('modalStart').onchange=(e)=>{
+        const sv = e.target.value || todayStr();
+        t.startOffset = Math.round((new Date(sv+'T00:00:00') - new Date(startDateStr+'T00:00:00'))/DAY_MS);
+        persist(); renderModal(); render();
+      };
+    } else {
+      startRow.innerHTML = `<div class="field"><label>Start (auto-scheduled)</label><div class="modal-readonly">${fmtDate(addDays(startDateStr,r.ES))}</div></div>
+        <div class="field"><label>Finish (computed)</label><div class="modal-readonly" id="modalFinish"></div></div>`;
+    }
+    el('modalFinish').textContent = fmtDate(addDays(startDateStr, r.EF));
+
+    const depsWrap = el('modalDeps');
+    depsWrap.innerHTML='';
+    tasks.filter(o=>o.id!==t.id).forEach(o=>{
+      const existing = normDeps.find(d=>d.id===o.id);
+      const drow=document.createElement('div'); drow.className='deprow';
+      const lbl=document.createElement('label');
+      const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=!!existing;
+      cb.onchange=()=>{
+        let deps=(t.deps||[]).map(normalizeDep);
+        if(cb.checked) deps.push({id:o.id, lag:0});
+        else deps=deps.filter(d=>d.id!==o.id);
+        t.deps=deps;
+        persist(); renderModal(); render();
+      };
+      lbl.appendChild(cb); lbl.appendChild(document.createTextNode(o.name));
+      drow.appendChild(lbl);
+      const lagInput=document.createElement('input');
+      lagInput.type='number'; lagInput.value=existing?existing.lag:0; lagInput.disabled=!existing;
+      lagInput.title='Lag (+) / lead (-) days'; lagInput.style.width='50px'; lagInput.style.fontSize='12px';
+      lagInput.style.padding='3px 4px'; lagInput.style.border='1px solid var(--line)'; lagInput.style.borderRadius='2px';
+      lagInput.onchange=(e)=>{
+        let deps=(t.deps||[]).map(normalizeDep);
+        const dd=deps.find(x=>x.id===o.id);
+        if(dd){ dd.lag=parseInt(e.target.value)||0; t.deps=deps; persist(); render(); }
+      };
+      drow.appendChild(lagInput);
+      const dLbl=document.createElement('span'); dLbl.textContent='d'; dLbl.style.fontSize='11px'; dLbl.style.color='var(--ink-soft)';
+      drow.appendChild(dLbl);
+      depsWrap.appendChild(drow);
+    });
+  }
+
+  el('modalClose').addEventListener('click', ()=>{ closeModal(); render(); });
+  el('modalDoneBtn').addEventListener('click', ()=>{ closeModal(); render(); });
+  el('modalOverlay').addEventListener('click',(e)=>{ if(e.target.id==='modalOverlay'){ closeModal(); render(); } });
+  el('modalName').addEventListener('change',(e)=>{
+    const t=tasks.find(x=>x.id===openModalId); if(t){ t.name=e.target.value.trim()||t.name; persist(); render(); }
+  });
+  el('modalCategory').addEventListener('change', async (e)=>{
+    const t=tasks.find(x=>x.id===openModalId); if(!t) return;
+    if(e.target.value==='__new__'){
+      const name = await showDialog({
+        title:'New category', input:true,
+        buttons:[{label:'Cancel', value:null},{label:'Add', value:'go', primary:true, useInput:true}]
+      });
+      if(name){ if(!categoryOrder.includes(name)) categoryOrder.push(name); t.category=name; persist(); renderModal(); render(); }
+      else { e.target.value = t.category||UNCATEGORIZED; }
+    } else {
+      t.category=e.target.value; persist(); render();
+    }
+  });
+  el('modalDuration').addEventListener('change',(e)=>{
+    const t=tasks.find(x=>x.id===openModalId); if(t){ t.duration=Math.max(1,parseInt(e.target.value)||1); persist(); renderModal(); render(); }
+  });
+  el('modalPercent').addEventListener('change',(e)=>{
+    const t=tasks.find(x=>x.id===openModalId); if(t){ t.percent=Math.min(100,Math.max(0,parseInt(e.target.value)||0)); persist(); render(); }
+  });
+  el('modalDeleteBtn').addEventListener('click', async ()=>{
+    const t=tasks.find(x=>x.id===openModalId); if(!t) return;
+    const ok = await showDialog({
+      title:'Delete task?', message:`Delete "${t.name}"? This cannot be undone.`,
+      buttons:[{label:'Cancel', value:null},{label:'Delete', value:true, primary:true}]
+    });
+    if(ok){
+      tasks=tasks.filter(x=>x.id!==t.id);
+      tasks.forEach(x=>x.deps=(x.deps||[]).map(normalizeDep).filter(d=>d.id!==t.id));
+      persist(); closeModal(); render();
+    }
+  });
+
+  // ---------- roll up all ----------
+  el('rollupAllBtn').addEventListener('click', ()=>{
+    const allCollapsed = categoryOrder.length>0 && categoryOrder.every(c=>collapsedCategories.includes(c));
+    collapsedCategories = allCollapsed ? [] : [...categoryOrder];
+    persist(); render();
+  });
+
+  // ---------- save to / load from PC ----------
+  el('saveFileBtn').addEventListener('click', ()=>{
+    const data = {
+      projectName: activeProject,
+      startDate: startDateStr,
+      categoryOrder, collapsedCategories,
+      tasks: tasks.map(t=>({id:t.id,name:t.name,duration:t.duration,deps:t.deps,startOffset:t.startOffset,category:t.category||UNCATEGORIZED,percent:t.percent||0}))
+    };
+    const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href=url; a.download=(activeProject||'schedule').replace(/[^a-z0-9\-_]+/gi,'_')+'.json';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+  el('loadFileBtn').addEventListener('click', ()=>{ el('loadFileInput').click(); });
+  el('loadFileInput').addEventListener('change', (e)=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = async (ev)=>{
+      try{
+        const data = JSON.parse(ev.target.result);
+        let finalName = data.projectName || file.name.replace(/\.json$/i,'') || 'Imported Project';
+        if(projectList.includes(finalName)){
+          const overwrite = await showDialog({
+            title:'Project already exists',
+            message:`A project named "${finalName}" already exists. Overwrite it, or import as a new copy?`,
+            buttons:[{label:'Import as copy', value:false},{label:'Overwrite', value:true, primary:true}]
+          });
+          if(!overwrite){
+            let n=2, candidate=finalName+' ('+n+')';
+            while(projectList.includes(candidate)){ n++; candidate=finalName+' ('+n+')'; }
+            finalName=candidate;
+          }
+        }
+        if(!projectList.includes(finalName)){ projectList.push(finalName); saveProjectList(projectList); }
+        await saveProject(finalName, {
+          startDate: data.startDate || todayStr(),
+          categoryOrder: data.categoryOrder || [],
+          collapsedCategories: data.collapsedCategories || [],
+          tasks: data.tasks || []
+        });
+        await loadActiveProject(finalName);
+      }catch(err){
+        await showDialog({title:'Could not load file', message:"Make sure it's a schedule JSON exported from this app.", buttons:[{label:'OK', value:true, primary:true}]});
+      }
+    };
+    reader.readAsText(file);
+    e.target.value='';
+  });
+
+  // ---------- print ----------
+  el('printBtn').addEventListener('click',(e)=>{
+    e.stopPropagation();
+    el('printMenu').style.display = el('printMenu').style.display==='none' ? 'block' : 'none';
+  });
+  document.addEventListener('click',(e)=>{
+    if(!e.target.closest('#printBtn') && !e.target.closest('#printMenu')) el('printMenu').style.display='none';
+  });
+  el('printGanttOpt').addEventListener('click', ()=>{ el('printMenu').style.display='none'; printGantt(); });
+  el('printListOpt').addEventListener('click', ()=>{ el('printMenu').style.display='none'; printList(); });
+
+  function printGantt(){
+    render();
+    const wrap = el('printScaleWrap');
+    const gridwrap = el('gridwrap');
+    const totalW = gridwrap.scrollWidth;
+    const totalH = gridwrap.scrollHeight;
+    const targetWidthPx = 1000; // approx printable width, landscape, generic paper size
+    const scale = totalW > targetWidthPx ? targetWidthPx/totalW : 1;
+    gridwrap.style.transformOrigin = 'top left';
+    gridwrap.style.transform = `scale(${scale})`;
+    wrap.style.width = (totalW*scale)+'px';
+    wrap.style.height = (totalH*scale)+'px';
+    wrap.style.overflow = 'hidden';
+    document.body.classList.add('printing-gantt');
+    window.print();
+  }
+
+  function printList(){
+    const {result} = computeSchedule();
+    const rows = buildFullRows();
+    let html = `<h1 class="print-title">${escapeHtml(activeProject)}</h1>
+      <div class="print-meta">Start date: ${fmtDate(addDays(startDateStr,0))} · Printed ${fmtDate(new Date())}</div>
+      <table class="print-table"><thead><tr><th>Task</th><th>Start</th><th>Finish</th><th>Duration</th><th>% Complete</th><th>Predecessors</th></tr></thead><tbody>`;
+    rows.forEach(rowData=>{
+      if(rowData.type==='category'){
+        const rollup = categoryRollup(rowData.members, result);
+        const range = rowData.members.length ? ` — ${fmtDate(addDays(startDateStr,rollup.es))} to ${fmtDate(addDays(startDateStr,rollup.ef))} · ${rollup.percent}% complete` : '';
+        html += `<tr class="print-cat-row"><td colspan="6">${escapeHtml(rowData.name)} (${rowData.members.length})${range}</td></tr>`;
+      } else {
+        const t = rowData.task;
+        const r = result[t.id]||{ES:0,EF:0};
+        const preds = (t.deps||[]).map(normalizeDep).map(d=>{
+          const p = tasks.find(x=>x.id===d.id);
+          if(!p) return '';
+          return p.name + (d.lag ? ` (${d.lag>0?'+':''}${d.lag}d)` : '');
+        }).filter(Boolean).join(', ');
+        html += `<tr><td>${escapeHtml(t.name)}</td><td>${fmtDate(addDays(startDateStr,r.ES))}</td><td>${fmtDate(addDays(startDateStr,r.EF))}</td><td>${t.duration}d</td><td>${t.percent||0}%</td><td>${preds?escapeHtml(preds):'—'}</td></tr>`;
+      }
+    });
+    html += `</tbody></table>`;
+    el('printListWrap').innerHTML = html;
+    document.body.classList.add('printing-list');
+    window.print();
+  }
+
+  window.addEventListener('afterprint', ()=>{
+    document.body.classList.remove('printing-gantt');
+    document.body.classList.remove('printing-list');
+    const wrap = el('printScaleWrap');
+    wrap.style.width=''; wrap.style.height=''; wrap.style.overflow='';
+    render();
+  });
+
+  // ---------- auth-gated init ----------
+  function friendlyAuthError(err){
+    const code = err && err.code || '';
+    if(code.includes('user-not-found') || code.includes('wrong-password') || code.includes('invalid-credential')) return 'Incorrect email or password.';
+    if(code.includes('email-already-in-use')) return 'An account with that email already exists — try Sign in instead.';
+    if(code.includes('weak-password')) return 'Password should be at least 6 characters.';
+    if(code.includes('invalid-email')) return 'Enter a valid email address.';
+    return 'Something went wrong. Try again.';
+  }
+
+  async function initApp(){
+    el('loading').style.display='none';
+    el('body').style.display='block';
+    projectList = await loadProjectList();
+    if(projectList.length===0){
+      projectList=['Hotel Project 1'];
+    }
+    await loadActiveProject(projectList[0]);
+  }
+
+  function showAuthScreen(){
+    el('app').style.display='none';
+    el('loading').style.display='none';
+    el('authScreen').style.display='flex';
+    el('authError').textContent='';
+  }
+  function showApp(user){
+    el('authScreen').style.display='none';
+    el('accountEmail').textContent = user.email || '';
+    el('app').style.display='flex';
+  }
+
+  el('authSignInBtn').addEventListener('click', async ()=>{
+    const email = el('authEmail').value.trim();
+    const pw = el('authPassword').value;
+    el('authError').textContent='';
+    try{ await window.__fb.signInWithEmailAndPassword(window.__fb.auth, email, pw); }
+    catch(err){ el('authError').textContent = friendlyAuthError(err); }
+  });
+  el('authSignUpBtn').addEventListener('click', async ()=>{
+    const email = el('authEmail').value.trim();
+    const pw = el('authPassword').value;
+    el('authError').textContent='';
+    try{ await window.__fb.createUserWithEmailAndPassword(window.__fb.auth, email, pw); }
+    catch(err){ el('authError').textContent = friendlyAuthError(err); }
+  });
+  el('authGoogleBtn').addEventListener('click', async ()=>{
+    el('authError').textContent='';
+    try{ await window.__fb.signInWithPopup(window.__fb.auth, window.__fb.googleProvider); }
+    catch(err){
+      const code = err && err.code || '';
+      if(code.includes('popup-blocked') || code.includes('popup-closed') || code.includes('cancelled')){
+        el('authError').textContent = 'Sign-in was closed or blocked. If this keeps happening while embedded on Wix, try email/password instead — some browsers restrict Google sign-in inside embedded pages.';
+      } else {
+        el('authError').textContent = friendlyAuthError(err);
+      }
+    }
+  });
+  el('signOutBtn').addEventListener('click', async ()=>{
+    await window.__fb.signOut(window.__fb.auth);
+  });
+
+  whenFirebaseReady(()=>{
+    window.__fb.onAuthStateChanged(window.__fb.auth, async (user)=>{
+      if(user){
+        currentUid = user.uid;
+        showApp(user);
+        await initApp();
+      } else {
+        currentUid = null;
+        showAuthScreen();
+      }
+    });
+  });
+})();
+</script>
+</body>
+</html>
