@@ -516,7 +516,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
 
   // Bump this with every update handed off, so you can glance at the top bar and
   // confirm a new deploy actually loaded (vs. a stale cached copy).
-  const APP_VERSION = 'v1.4';
+  const APP_VERSION = 'v1.5';
   { const v = document.getElementById('appVersion'); if(v) v.textContent = APP_VERSION; }
 
   // Set this to your Wix Velo backend function URL (e.g. "https://yourdomain.com/_functions/generateSchedule")
@@ -795,7 +795,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
     el('cycwarn').style.display = hasCycle ? 'block' : 'none';
 
     const ppd = pxPerDay();
-    const totalDays = Math.max(finish+10, 30);
+    const totalDays = Math.max(calOff(finish)+10, 30);
     const chartWidth = totalDays*ppd;
 
     el('projFinish').innerHTML = tasks.length
