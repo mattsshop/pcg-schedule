@@ -279,6 +279,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
     <select id="projectSelect"></select>
     <button id="newProjectBtn" title="New project">+ Project</button>
     <button id="deleteProjectBtn" title="Delete this project">Delete Project</button>
+    <button id="shareProjectBtn" title="Invite someone to view/edit this project live">🔗 Share</button>
     <label>Start</label>
     <input type="date" id="startDate">
     <label style="display:flex;align-items:center;gap:5px;cursor:pointer;">
@@ -304,6 +305,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
     <div id="projFinish"></div>
     <div id="accountBox" style="font-size:12px;color:#CFE0E8;display:flex;align-items:center;gap:8px;">
       <span id="accountEmail"></span>
+      <button id="manageUsersBtn" style="display:none;">Manage Users</button>
       <button id="signOutBtn">Sign out</button>
     </div>
   </div>
@@ -432,6 +434,30 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
   </div>
 </div>
 
+<div id="statusScreen" style="display:none;position:fixed;inset:0;background:var(--ink);align-items:center;justify-content:center;z-index:100;">
+  <div class="modal" style="width:340px;">
+    <div class="modal-body" style="text-align:center;">
+      <div id="statusMessage" style="font-size:14px;color:var(--ink);"></div>
+    </div>
+    <div class="modal-footer" style="justify-content:center;">
+      <button class="ghostbtn" id="statusSignOutBtn">Sign out</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="usersModalOverlay">
+  <div class="modal" style="width:440px;">
+    <div class="modal-header">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:600;flex:1;">Manage Users</div>
+      <button class="rowbtn" id="usersModalClose" title="Close">✕</button>
+    </div>
+    <div class="modal-body" id="usersModalBody" style="max-height:55vh;overflow:auto;"></div>
+    <div class="modal-footer">
+      <button class="primarybtn" id="usersModalDone">Done</button>
+    </div>
+  </div>
+</div>
+
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
   import {
@@ -439,7 +465,8 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
     createUserWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithPopup
   } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
   import {
-    getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs
+    getFirestore, doc, getDoc, setDoc, deleteDoc, collection, getDocs,
+    query, where, arrayUnion, arrayRemove, onSnapshot
   } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -458,6 +485,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
 
   window.__fb = {
     auth, db, doc, getDoc, setDoc, deleteDoc, collection, getDocs,
+    query, where, arrayUnion, arrayRemove, onSnapshot,
     signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged,
     signInWithPopup, googleProvider
   };
@@ -473,7 +501,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
 
   // Bump this with every update handed off, so you can glance at the top bar and
   // confirm a new deploy actually loaded (vs. a stale cached copy).
-  const APP_VERSION = 'v1.2';
+  const APP_VERSION = 'v1.3';
   { const v = document.getElementById('appVersion'); if(v) v.textContent = APP_VERSION; }
 
   // Set this to your Wix Velo backend function URL (e.g. "https://yourdomain.com/_functions/generateSchedule")
@@ -495,7 +523,17 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
   let editingTaskId = null;
   let editingCategory = null;
   let currentUid = null;
+  let currentUserEmail = null;
+  let isAdmin = false;
   let workWeek = false; // when true, durations/lags are counted in working days (Mon-Fri) instead of calendar days
+  let activeProjectType = 'private'; // 'private' | 'shared'
+  let activeProjectId = null; // Firestore doc id: project name for private, generated id for shared
+  let activeSnapshotUnsub = null; // unsubscribe fn for the live listener on a shared project
+
+  // Set this to your own email (lowercase) to make that account the sole approver of new
+  // users, and the only one who can open Manage Users. Must match the ADMIN_EMAIL used
+  // in your Firestore security rules exactly.
+  const ADMIN_EMAIL = 'matt@mattsshop.com';
   let openCatPopoverId = null; // task id whose category popover is open
   let openModalId = null; // task id whose detail modal is open
 
@@ -508,12 +546,28 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
   function projectDocRef(name){
     return window.__fb.doc(window.__fb.db, 'users', currentUid, 'projects', name);
   }
+  function sharedProjectDocRef(id){
+    return window.__fb.doc(window.__fb.db, 'sharedProjects', id);
+  }
+  let activeProjectOwnerUid = null; // for shared projects: who owns it (only the owner can hard-delete it)
   async function loadProjectList(){
+    const result = [];
     try{
-      const snap = await window.__fb.getDocs(projectsCol());
-      const names=[]; snap.forEach(d=>names.push(d.id));
-      return names;
-    }catch(e){ console.error(e); return []; }
+      const mySnap = await window.__fb.getDocs(projectsCol());
+      mySnap.forEach(d=>result.push({type:'private', id:d.id, name:d.id}));
+    }catch(e){ console.error(e); }
+    try{
+      const q = window.__fb.query(
+        window.__fb.collection(window.__fb.db,'sharedProjects'),
+        window.__fb.where('members','array-contains',currentUid)
+      );
+      const sharedSnap = await window.__fb.getDocs(q);
+      sharedSnap.forEach(d=>{
+        const data = d.data();
+        result.push({type:'shared', id:d.id, name:data.name || '(shared project)'});
+      });
+    }catch(e){ console.error(e); }
+    return result;
   }
   function saveProjectList(list){
     // no-op: with Firestore, the project list is just "which documents exist" —
@@ -1182,36 +1236,66 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
   }
 
   async function persist(){
-    if(!activeProject) return;
-    await saveProject(activeProject, {
+    if(!activeProjectId) return;
+    const payload = {
       startDate: startDateStr,
       categoryOrder: categoryOrder,
       collapsedCategories: collapsedCategories,
       workWeek: workWeek,
       tasks: tasks.map(t=>({id:t.id,name:t.name,duration:t.duration,deps:t.deps,startOffset:t.startOffset,category:t.category||UNCATEGORIZED,percent:t.percent||0}))
-    });
+    };
+    try{
+      if(activeProjectType==='shared'){
+        // merge: never overwrite ownerUid/name/members, which aren't part of this payload
+        await window.__fb.setDoc(sharedProjectDocRef(activeProjectId), payload, {merge:true});
+      } else {
+        await saveProject(activeProjectId, payload);
+      }
+    }catch(e){ console.error(e); }
   }
 
   // ---------- project switching ----------
-  async function loadActiveProject(name){
-    const data = await loadProject(name);
-    activeProject = name;
-    if(data){
-      startDateStr = data.startDate || todayStr();
-      tasks = data.tasks || [];
-      categoryOrder = (data.categoryOrder && data.categoryOrder.length) ? data.categoryOrder : deriveCategories();
-      collapsedCategories = data.collapsedCategories || [];
-      workWeek = !!data.workWeek;
+  // ref: {type:'private'|'shared', id, name}
+  async function loadActiveProject(ref){
+    if(activeSnapshotUnsub){ activeSnapshotUnsub(); activeSnapshotUnsub=null; }
+    activeProjectType = ref.type;
+    activeProjectId = ref.id;
+    activeProject = ref.name;
+    activeProjectOwnerUid = ref.type==='private' ? currentUid : null;
+
+    if(ref.type==='shared'){
+      activeSnapshotUnsub = window.__fb.onSnapshot(sharedProjectDocRef(ref.id), (snap)=>{
+        if(!snap.exists()) return;
+        const data = snap.data();
+        activeProjectOwnerUid = data.ownerUid || null;
+        startDateStr = data.startDate || todayStr();
+        tasks = data.tasks || [];
+        categoryOrder = (data.categoryOrder && data.categoryOrder.length) ? data.categoryOrder : deriveCategories();
+        collapsedCategories = data.collapsedCategories || [];
+        workWeek = !!data.workWeek;
+        el('startDate').value = startDateStr;
+        el('workWeekToggle').checked = workWeek;
+        render();
+      }, (err)=>console.error(err));
     } else {
-      startDateStr = todayStr();
-      tasks = templateTasks();
-      categoryOrder = templateCategories();
-      collapsedCategories = [];
-      workWeek = false;
-      await persist();
+      const data = await loadProject(ref.id);
+      if(data){
+        startDateStr = data.startDate || todayStr();
+        tasks = data.tasks || [];
+        categoryOrder = (data.categoryOrder && data.categoryOrder.length) ? data.categoryOrder : deriveCategories();
+        collapsedCategories = data.collapsedCategories || [];
+        workWeek = !!data.workWeek;
+      } else {
+        startDateStr = todayStr();
+        tasks = templateTasks();
+        categoryOrder = templateCategories();
+        collapsedCategories = [];
+        workWeek = false;
+        await persist();
+      }
+      el('startDate').value = startDateStr;
+      el('workWeekToggle').checked = workWeek;
     }
-    el('startDate').value = startDateStr;
-    el('workWeekToggle').checked = workWeek;
     populateProjectSelect();
     render();
   }
@@ -1225,15 +1309,22 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
   function populateProjectSelect(){
     const sel = el('projectSelect');
     sel.innerHTML='';
-    projectList.forEach(n=>{
-      const opt=document.createElement('option'); opt.value=n; opt.textContent=n;
-      if(n===activeProject) opt.selected=true;
+    projectList.forEach(p=>{
+      const opt=document.createElement('option');
+      opt.value = p.type+'::'+p.id;
+      opt.textContent = p.name + (p.type==='shared' ? ' 🔗' : '');
+      if(p.type===activeProjectType && p.id===activeProjectId) opt.selected=true;
       sel.appendChild(opt);
     });
   }
 
   // ---------- event wiring ----------
-  el('projectSelect').addEventListener('change', async (e)=>{ await loadActiveProject(e.target.value); });
+  el('projectSelect').addEventListener('change', async (e)=>{
+    const idx = e.target.value.indexOf('::');
+    const type = e.target.value.slice(0,idx), id = e.target.value.slice(idx+2);
+    const match = projectList.find(p=>p.type===type && p.id===id);
+    if(match) await loadActiveProject(match);
+  });
 
   el('newProjectBtn').addEventListener('click', async ()=>{
     const name = await showDialog({
@@ -1242,7 +1333,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
       buttons:[{label:'Cancel', value:null},{label:'Next', value:'go', primary:true, useInput:true}]
     });
     if(!name) return;
-    if(projectList.includes(name)){
+    if(projectList.some(p=>p.name===name)){
       await showDialog({title:'Name already used', message:'A project with that name already exists.', buttons:[{label:'OK', value:true, primary:true}]});
       return;
     }
@@ -1258,13 +1349,12 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
     });
     if(!choice) return;
     if(choice==='ai'){ openAIGenDialog(name); return; }
-    projectList.push(name);
-    saveProjectList(projectList);
     const data = choice==='template'
-      ? { startDate: todayStr(), categoryOrder: templateCategories(), collapsedCategories: [], tasks: templateTasks() }
-      : { startDate: todayStr(), categoryOrder: [], collapsedCategories: [], tasks: [] };
+      ? { startDate: todayStr(), categoryOrder: templateCategories(), collapsedCategories: [], workWeek:false, tasks: templateTasks() }
+      : { startDate: todayStr(), categoryOrder: [], collapsedCategories: [], workWeek:false, tasks: [] };
     await saveProject(name, data);
-    await loadActiveProject(name);
+    projectList = await loadProjectList();
+    await loadActiveProject({type:'private', id:name, name});
   });
 
   // ---------- AI schedule generation ----------
@@ -1429,11 +1519,10 @@ Guidelines:
       const {tasks:newTasks, categoryOrder:newCats} = materializeAIPlan(parsed);
       if(!newTasks.length) throw new Error('empty plan');
       const name = aiGenPendingName;
-      projectList.push(name);
-      saveProjectList(projectList);
-      await saveProject(name, { startDate: todayStr(), categoryOrder:newCats, collapsedCategories:[], tasks:newTasks });
+      await saveProject(name, { startDate: todayStr(), categoryOrder:newCats, collapsedCategories:[], workWeek:false, tasks:newTasks });
       closeAIGenDialog();
-      await loadActiveProject(name);
+      projectList = await loadProjectList();
+      await loadActiveProject({type:'private', id:name, name});
     }catch(err){
       el('aiGenStatus').style.color='var(--critical)';
       if(err && err.message==='json-parse-failed'){
@@ -1458,22 +1547,94 @@ Guidelines:
   });
 
   el('deleteProjectBtn').addEventListener('click', async ()=>{
-    if(!activeProject) return;
-    const ok = await showDialog({
-      title:'Delete project?',
-      message:`Delete "${activeProject}" and all its tasks? This cannot be undone.`,
-      buttons:[{label:'Cancel', value:null},{label:'Delete', value:true, primary:true}]
-    });
-    if(!ok) return;
-    await deleteProjectDb(activeProject);
-    projectList = projectList.filter(n=>n!==activeProject);
+    if(!activeProjectId) return;
+    const isNonOwnerShared = activeProjectType==='shared' && activeProjectOwnerUid && activeProjectOwnerUid!==currentUid;
+    if(isNonOwnerShared){
+      const ok = await showDialog({
+        title:'Leave shared project?',
+        message:`Remove yourself from "${activeProject}"? You'll lose access — other members keep theirs.`,
+        buttons:[{label:'Cancel', value:null},{label:'Leave', value:true, primary:true}]
+      });
+      if(!ok) return;
+      try{ await window.__fb.setDoc(sharedProjectDocRef(activeProjectId), {members: window.__fb.arrayRemove(currentUid)}, {merge:true}); }
+      catch(e){ console.error(e); }
+    } else {
+      const ok = await showDialog({
+        title:'Delete project?',
+        message:`Delete "${activeProject}"${activeProjectType==='shared'?' for everyone with access':''}? This cannot be undone.`,
+        buttons:[{label:'Cancel', value:null},{label:'Delete', value:true, primary:true}]
+      });
+      if(!ok) return;
+      if(activeProjectType==='shared'){
+        try{ await window.__fb.deleteDoc(sharedProjectDocRef(activeProjectId)); }catch(e){ console.error(e); }
+      } else {
+        await deleteProjectDb(activeProjectId);
+      }
+    }
+    if(activeSnapshotUnsub){ activeSnapshotUnsub(); activeSnapshotUnsub=null; }
+    projectList = await loadProjectList();
     if(projectList.length===0){
       const name = 'Hotel Project 1';
-      projectList = [name];
       await saveProject(name, { startDate: todayStr(), categoryOrder: templateCategories(), collapsedCategories: [], workWeek:false, tasks: templateTasks() });
-      await loadActiveProject(name);
-    } else {
-      await loadActiveProject(projectList[0]);
+      projectList = await loadProjectList();
+    }
+    await loadActiveProject(projectList[0]);
+  });
+
+  el('shareProjectBtn').addEventListener('click', async ()=>{
+    if(!activeProjectId) return;
+    if(activeProjectType==='private'){
+      const confirmed = await showDialog({
+        title:'Share this project?',
+        message:`This turns "${activeProject}" into a live shared project. Anyone you invite will see edits from everyone in real time.`,
+        buttons:[{label:'Cancel', value:null},{label:'Share', value:true, primary:true}]
+      });
+      if(!confirmed) return;
+      const oldId = activeProjectId;
+      const newDocId = newId();
+      const payload = {
+        ownerUid: currentUid,
+        ownerEmail: currentUserEmail,
+        name: activeProject,
+        startDate: startDateStr,
+        categoryOrder, collapsedCategories, workWeek,
+        tasks: tasks.map(t=>({id:t.id,name:t.name,duration:t.duration,deps:t.deps,startOffset:t.startOffset,category:t.category||UNCATEGORIZED,percent:t.percent||0})),
+        members: [currentUid]
+      };
+      try{
+        await window.__fb.setDoc(sharedProjectDocRef(newDocId), payload);
+        await deleteProjectDb(oldId);
+      }catch(e){
+        console.error(e);
+        await showDialog({title:'Could not share project', message:'Something went wrong turning this into a shared project. Try again.', buttons:[{label:'OK', value:true, primary:true}]});
+        return;
+      }
+      projectList = await loadProjectList();
+      await loadActiveProject({type:'shared', id:newDocId, name: activeProject});
+    }
+
+    const email = await showDialog({
+      title:'Invite someone',
+      message:'Enter the email of someone who has signed into this app at least once.',
+      input:true,
+      buttons:[{label:'Cancel', value:null},{label:'Invite', value:'go', primary:true, useInput:true}]
+    });
+    if(!email) return;
+    const normEmail = email.trim().toLowerCase();
+    if(!normEmail) return;
+    try{
+      const q = window.__fb.query(window.__fb.collection(window.__fb.db,'userStatus'), window.__fb.where('email','==',normEmail));
+      const snap = await window.__fb.getDocs(q);
+      if(snap.empty){
+        await showDialog({title:'User not found', message:'That person needs to sign into the app at least once before you can invite them.', buttons:[{label:'OK', value:true, primary:true}]});
+        return;
+      }
+      const inviteUid = snap.docs[0].id;
+      await window.__fb.setDoc(sharedProjectDocRef(activeProjectId), {members: window.__fb.arrayUnion(inviteUid)}, {merge:true});
+      await showDialog({title:'Invited', message:`They'll see "${activeProject}" next time they open the app.`, buttons:[{label:'OK', value:true, primary:true}]});
+    }catch(e){
+      console.error(e);
+      await showDialog({title:'Something went wrong', message:'Could not send the invite. Try again.', buttons:[{label:'OK', value:true, primary:true}]});
     }
   });
 
@@ -1723,7 +1884,8 @@ Guidelines:
       try{
         const data = JSON.parse(ev.target.result);
         let finalName = data.projectName || file.name.replace(/\.json$/i,'') || 'Imported Project';
-        if(projectList.includes(finalName)){
+        const nameTaken = n => projectList.some(p=>p.name===n);
+        if(nameTaken(finalName)){
           const overwrite = await showDialog({
             title:'Project already exists',
             message:`A project named "${finalName}" already exists. Overwrite it, or import as a new copy?`,
@@ -1731,18 +1893,19 @@ Guidelines:
           });
           if(!overwrite){
             let n=2, candidate=finalName+' ('+n+')';
-            while(projectList.includes(candidate)){ n++; candidate=finalName+' ('+n+')'; }
+            while(nameTaken(candidate)){ n++; candidate=finalName+' ('+n+')'; }
             finalName=candidate;
           }
         }
-        if(!projectList.includes(finalName)){ projectList.push(finalName); saveProjectList(projectList); }
         await saveProject(finalName, {
           startDate: data.startDate || todayStr(),
           categoryOrder: data.categoryOrder || [],
           collapsedCategories: data.collapsedCategories || [],
+          workWeek: !!data.workWeek,
           tasks: data.tasks || []
         });
-        await loadActiveProject(finalName);
+        projectList = await loadProjectList();
+        await loadActiveProject({type:'private', id:finalName, name:finalName});
       }catch(err){
         await showDialog({title:'Could not load file', message:"Make sure it's a schedule JSON exported from this app.", buttons:[{label:'OK', value:true, primary:true}]});
       }
@@ -1847,22 +2010,106 @@ Guidelines:
     el('body').style.display='block';
     projectList = await loadProjectList();
     if(projectList.length===0){
-      projectList=['Hotel Project 1'];
+      const name = 'Hotel Project 1';
+      await saveProject(name, { startDate: todayStr(), categoryOrder: templateCategories(), collapsedCategories: [], workWeek:false, tasks: templateTasks() });
+      projectList = await loadProjectList();
     }
     await loadActiveProject(projectList[0]);
   }
 
   function showAuthScreen(){
     el('app').style.display='none';
+    el('statusScreen').style.display='none';
     el('loading').style.display='none';
     el('authScreen').style.display='flex';
     el('authError').textContent='';
   }
   function showApp(user){
     el('authScreen').style.display='none';
+    el('statusScreen').style.display='none';
     el('accountEmail').textContent = user.email || '';
     el('app').style.display='flex';
   }
+  function showStatusScreen(message){
+    el('app').style.display='none';
+    el('authScreen').style.display='none';
+    el('loading').style.display='none';
+    el('statusMessage').textContent = message;
+    el('statusScreen').style.display='flex';
+  }
+
+  // Creates a userStatus/{uid} doc on first sign-in (status starts 'pending' unless it's
+  // the admin account, which is auto-approved), and returns the current status.
+  async function ensureUserStatus(user){
+    const email = (user.email||'').toLowerCase();
+    const ref = window.__fb.doc(window.__fb.db,'userStatus',user.uid);
+    const isAdminUser = email === ADMIN_EMAIL.toLowerCase();
+    try{
+      const snap = await window.__fb.getDoc(ref);
+      if(!snap.exists()){
+        await window.__fb.setDoc(ref, {
+          email, displayName:user.displayName||'',
+          status: isAdminUser ? 'approved' : 'pending',
+          requestedAt: new Date().toISOString()
+        });
+        return isAdminUser ? 'approved' : 'pending';
+      }
+      const data = snap.data();
+      if(isAdminUser && data.status!=='approved'){
+        await window.__fb.setDoc(ref, {status:'approved'}, {merge:true});
+        return 'approved';
+      }
+      return data.status || 'pending';
+    }catch(e){
+      console.error(e);
+      return 'pending';
+    }
+  }
+
+  function renderUsersModal(){
+    const body = el('usersModalBody');
+    body.innerHTML = '<div style="padding:12px;color:var(--ink-soft);font-size:12px;">Loading…</div>';
+    window.__fb.getDocs(window.__fb.collection(window.__fb.db,'userStatus')).then(snap=>{
+      body.innerHTML='';
+      if(snap.empty){ body.innerHTML = '<div style="padding:12px;color:var(--ink-soft);font-size:12px;">No users yet.</div>'; return; }
+      snap.forEach(d=>{
+        const data = d.data();
+        const row = document.createElement('div');
+        row.style.cssText='display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid var(--line-soft);font-size:13px;';
+        const info = document.createElement('div');
+        info.style.flex='1';
+        info.innerHTML = `${escapeHtml(data.email||d.id)}<div style="font-size:11px;color:var(--ink-soft);text-transform:capitalize;">${escapeHtml(data.status||'pending')}</div>`;
+        row.appendChild(info);
+        if((data.email||'').toLowerCase()===ADMIN_EMAIL.toLowerCase()){
+          const badge=document.createElement('span'); badge.textContent='Admin';
+          badge.style.cssText='font-size:11px;color:var(--accent);font-weight:600;';
+          row.appendChild(badge);
+        } else {
+          const approveBtn=document.createElement('button'); approveBtn.className='ghostbtn'; approveBtn.textContent='Approve';
+          approveBtn.disabled = data.status==='approved';
+          approveBtn.onclick=async()=>{
+            await window.__fb.setDoc(window.__fb.doc(window.__fb.db,'userStatus',d.id),{status:'approved'},{merge:true});
+            renderUsersModal();
+          };
+          const rejectBtn=document.createElement('button'); rejectBtn.className='ghostbtn'; rejectBtn.textContent='Reject';
+          rejectBtn.style.color='var(--critical)';
+          rejectBtn.disabled = data.status==='rejected';
+          rejectBtn.onclick=async()=>{
+            await window.__fb.setDoc(window.__fb.doc(window.__fb.db,'userStatus',d.id),{status:'rejected'},{merge:true});
+            renderUsersModal();
+          };
+          row.appendChild(approveBtn); row.appendChild(rejectBtn);
+        }
+        body.appendChild(row);
+      });
+    }).catch(e=>{
+      console.error(e);
+      body.innerHTML = '<div style="padding:12px;color:var(--critical);font-size:12px;">Could not load users.</div>';
+    });
+  }
+  el('manageUsersBtn').addEventListener('click', ()=>{ renderUsersModal(); el('usersModalOverlay').classList.add('open'); });
+  el('usersModalClose').addEventListener('click', ()=>el('usersModalOverlay').classList.remove('open'));
+  el('usersModalDone').addEventListener('click', ()=>el('usersModalOverlay').classList.remove('open'));
 
   el('authSignInBtn').addEventListener('click', async ()=>{
     const email = el('authEmail').value.trim();
@@ -1893,15 +2140,29 @@ Guidelines:
   el('signOutBtn').addEventListener('click', async ()=>{
     await window.__fb.signOut(window.__fb.auth);
   });
+  el('statusSignOutBtn').addEventListener('click', async ()=>{
+    await window.__fb.signOut(window.__fb.auth);
+  });
 
   whenFirebaseReady(()=>{
     window.__fb.onAuthStateChanged(window.__fb.auth, async (user)=>{
       if(user){
         currentUid = user.uid;
-        showApp(user);
-        await initApp();
+        currentUserEmail = (user.email||'').toLowerCase();
+        isAdmin = currentUserEmail === ADMIN_EMAIL.toLowerCase();
+        const status = await ensureUserStatus(user);
+        if(status==='approved'){
+          showApp(user);
+          el('manageUsersBtn').style.display = isAdmin ? 'inline-block' : 'none';
+          await initApp();
+        } else if(status==='rejected'){
+          showStatusScreen("Your access to this app hasn't been approved. Contact the administrator if you believe this is a mistake.");
+        } else {
+          showStatusScreen("Your account is waiting for approval. You'll get access once the administrator approves it.");
+        }
       } else {
-        currentUid = null;
+        currentUid = null; currentUserEmail = null; isAdmin = false;
+        if(activeSnapshotUnsub){ activeSnapshotUnsub(); activeSnapshotUnsub=null; }
         showAuthScreen();
       }
     });
