@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Site Schedule</title>
+<title>PCG Schedules</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Work+Sans:wght@400;500;600;700&display=swap');
 
@@ -272,7 +272,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
 <body>
 <div id="app">
   <div id="topbar">
-    <div class="brand">Site Schedule</div>
+    <div class="brand">PCG Schedules <span id="appVersion" style="font-size:10px;color:#9FB0BC;font-weight:400;font-family:'Work Sans',sans-serif;vertical-align:middle;"></span></div>
     <label>Project</label>
     <select id="projectSelect"></select>
     <button id="newProjectBtn" title="New project">+ Project</button>
@@ -409,7 +409,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
 <div id="authScreen" style="display:none;position:fixed;inset:0;background:var(--ink);align-items:center;justify-content:center;z-index:100;">
   <div class="modal" style="width:340px;">
     <div class="modal-header">
-      <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:600;flex:1;">Site Schedule</div>
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:600;flex:1;">PCG Schedules</div>
     </div>
     <div class="modal-body">
       <div style="font-size:12px;color:var(--ink-soft);">Sign in to sync your schedules across devices.</div>
@@ -468,6 +468,11 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
     if(window.__fb) cb(); else window.addEventListener('firebase-ready', cb, {once:true});
   }
   const PALETTE = ['#2C5F7C','#3E7C8C','#5A8F72','#8A8F5A','#A87A4A','#8C6E54','#6E5A7C','#4F6E8C','#B2703A','#5A7C6E','#3E5A7C','#7C5A46'];
+
+  // Bump this with every update handed off, so you can glance at the top bar and
+  // confirm a new deploy actually loaded (vs. a stale cached copy).
+  const APP_VERSION = 'v1.1';
+  { const v = document.getElementById('appVersion'); if(v) v.textContent = APP_VERSION; }
 
   // Set this to your Wix Velo backend function URL (e.g. "https://yourdomain.com/_functions/generateSchedule")
   // once you've set one up, so AI-generate works outside Claude.ai. Leave null to call Anthropic
