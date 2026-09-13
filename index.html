@@ -231,6 +231,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
 .popover{
   position:absolute;background:#fff;border:1px solid var(--line);border-radius:4px;
   box-shadow:0 4px 14px rgba(0,0,0,0.18);padding:10px;z-index:10;width:250px;
+  color:var(--ink);
 }
 .popover h4{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:0.05em;color:var(--ink-soft);font-family:'Work Sans';font-weight:600;}
 .catoption{
@@ -540,7 +541,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
 
   // Bump this with every update handed off, so you can glance at the top bar and
   // confirm a new deploy actually loaded (vs. a stale cached copy).
-  const APP_VERSION = 'v2.4';
+  const APP_VERSION = 'v2.5';
   { const v = document.getElementById('appVersion'); if(v) v.textContent = APP_VERSION; }
 
   // Set this to your Wix Velo backend function URL (e.g. "https://yourdomain.com/_functions/generateSchedule")
@@ -2102,8 +2103,11 @@ Guidelines:
   function printList(){
     const {result} = computeSchedule();
     const rows = buildFullRows();
+    const totalDur = tasks.reduce((s,t)=>s+t.duration,0) || 1;
+    const weightedPct = tasks.reduce((s,t)=>s+t.duration*(t.percent||0),0);
+    const overallPercent = Math.round(weightedPct/totalDur);
     let html = `<h1 class="print-title">${escapeHtml(activeProject)}</h1>
-      <div class="print-meta">Start date: ${fmtDate(addDays(startDateStr,0))} · Printed ${fmtDate(new Date())}${workWeek?' · 5-day work week':''}</div>
+      <div class="print-meta">Start date: ${fmtDate(addDays(startDateStr,0))} · Printed ${fmtDate(new Date())}${workWeek?' · 5-day work week':''} · <b>Overall completion: ${overallPercent}%</b></div>
       <table class="print-table"><thead><tr><th>Task</th><th>Start</th><th>Finish</th><th>Duration</th><th>% Complete</th><th>Predecessors</th></tr></thead><tbody>`;
     rows.forEach(rowData=>{
       if(rowData.type==='category'){
