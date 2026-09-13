@@ -85,9 +85,10 @@ h1,h2,h3,.head{
 .row.category-row{background:#EAE3D2;}
 .row.category-row .chart-cell{background:#F1ECDE;}
 
+:root{ --sidebar-w: 480px; }
 .sidebar-cell{
   position:sticky;left:0;z-index:3;
-  width:480px;min-width:480px;
+  width:var(--sidebar-w);min-width:var(--sidebar-w);
   background:var(--panel);
   border-right:2px solid var(--line);
   display:grid;
@@ -98,7 +99,6 @@ h1,h2,h3,.head{
     [finish] 50px
     [dur] 32px
     [pct] 32px
-    [cat] 22px
     [details] 20px
     [del] 20px;
   column-gap:5px;
@@ -301,6 +301,10 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
       <input type="checkbox" id="barNamesToggle" style="width:auto;">
       Names on Bars
     </label>
+    <div class="zoomgroup">
+      <button id="nameNarrowBtn" title="Narrow the task name column">Name −</button>
+      <button id="nameWidenBtn" title="Widen the task name column">Name +</button>
+    </div>
     <div class="zoomgroup">
       <button id="zoomDay">Day</button>
       <button id="zoomWeek">Week</button>
@@ -516,7 +520,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
 
   // Bump this with every update handed off, so you can glance at the top bar and
   // confirm a new deploy actually loaded (vs. a stale cached copy).
-  const APP_VERSION = 'v1.6';
+  const APP_VERSION = 'v1.7';
   { const v = document.getElementById('appVersion'); if(v) v.textContent = APP_VERSION; }
 
   // Set this to your Wix Velo backend function URL (e.g. "https://yourdomain.com/_functions/generateSchedule")
@@ -525,7 +529,12 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
   const AI_PROXY_URL = null;
   const DAY_MS = 86400000;
   const ROW_H = 46;
-  const SIDEBAR_W = 480;
+  let SIDEBAR_W = 480;
+  function setSidebarWidth(px){
+    SIDEBAR_W = Math.max(280, Math.min(900, px));
+    document.documentElement.style.setProperty('--sidebar-w', SIDEBAR_W+'px');
+    render();
+  }
   const UNCATEGORIZED = 'Uncategorized';
 
   let projectList = [];
@@ -550,7 +559,6 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
   // users, and the only one who can open Manage Users. Must match the ADMIN_EMAIL used
   // in your Firestore security rules exactly.
   const ADMIN_EMAIL = 'matt@mattsshop.com';
-  let openCatPopoverId = null; // task id whose category popover is open
   let openModalId = null; // task id whose detail modal is open
 
   const el = id => document.getElementById(id);
@@ -1026,53 +1034,10 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
       pct.onchange=(e)=>{ t.percent=Math.min(100,Math.max(0,parseInt(e.target.value)||0)); persist(); render(); };
       sb.appendChild(pct);
 
-      const catBtn=document.createElement('button');
-      catBtn.className='catbtn'; catBtn.style.gridColumn='cat';
-      catBtn.style.background = categoryColor(t.category||UNCATEGORIZED);
-      catBtn.title='Category: '+(t.category||UNCATEGORIZED);
-      catBtn.onclick=(e)=>{ e.stopPropagation(); openCatPopoverId = openCatPopoverId===t.id?null:t.id; render(); };
-      sb.appendChild(catBtn);
-
       const detailsBtn=document.createElement('button');
-      detailsBtn.className='rowbtn'; detailsBtn.style.gridColumn='details'; detailsBtn.title='Open task details (includes % complete)'; detailsBtn.textContent='▤';
+      detailsBtn.className='rowbtn'; detailsBtn.style.gridColumn='details'; detailsBtn.title='Open task details (category, % complete, delete, and more)'; detailsBtn.textContent='▤';
       detailsBtn.onclick=(e)=>{ e.stopPropagation(); openModal(t.id); };
       sb.appendChild(detailsBtn);
-
-      const delBtn=document.createElement('button');
-      delBtn.className='rowbtn'; delBtn.style.gridColumn='del'; delBtn.title='Delete';
-      delBtn.textContent = t._confirm ? 'Confirm?' : '✕';
-      delBtn.style.color = t._confirm ? 'var(--critical)' : '';
-      delBtn.onclick=(e)=>{ e.stopPropagation();
-        if(t._confirm){ tasks=tasks.filter(x=>x.id!==t.id); tasks.forEach(x=>x.deps=(x.deps||[]).map(normalizeDep).filter(d=>d.id!==t.id)); persist(); render(); }
-        else { t._confirm=true; render(); setTimeout(()=>{t._confirm=false;},3000); }
-      };
-      sb.appendChild(delBtn);
-
-      if(openCatPopoverId===t.id){
-        const pop=document.createElement('div');
-        pop.className='popover'; pop.style.top=(idx*ROW_H+44+30)+'px'; pop.style.left='20px';
-        pop.innerHTML=`<h4>Category</h4>`;
-        categoryOrder.forEach(cat=>{
-          const opt=document.createElement('div');
-          opt.className='catoption'+((t.category||UNCATEGORIZED)===cat?' active':'');
-          opt.innerHTML=`<span class="dot" style="background:${categoryColor(cat)}"></span>${escapeHtml(cat)}`;
-          opt.onclick=()=>{ t.category=cat; openCatPopoverId=null; persist(); render(); };
-          pop.appendChild(opt);
-        });
-        const newRow=document.createElement('div');
-        newRow.className='newcatrow';
-        const input=document.createElement('input'); input.type='text'; input.placeholder='New category…';
-        const addBtn=document.createElement('button'); addBtn.className='ghostbtn'; addBtn.textContent='Add';
-        addBtn.onclick=()=>{
-          const name=input.value.trim();
-          if(!name) return;
-          if(!categoryOrder.includes(name)) categoryOrder.push(name);
-          t.category=name; openCatPopoverId=null; persist(); render();
-        };
-        newRow.appendChild(input); newRow.appendChild(addBtn);
-        pop.appendChild(newRow);
-        sb.appendChild(pop);
-      }
 
       row.appendChild(sb);
 
@@ -1574,6 +1539,9 @@ Guidelines:
     render();
   });
 
+  el('nameNarrowBtn').addEventListener('click', ()=> setSidebarWidth(SIDEBAR_W-60));
+  el('nameWidenBtn').addEventListener('click', ()=> setSidebarWidth(SIDEBAR_W+60));
+
   el('deleteProjectBtn').addEventListener('click', async ()=>{
     if(!activeProjectId) return;
     const isNonOwnerShared = activeProjectType==='shared' && activeProjectOwnerUid && activeProjectOwnerUid!==currentUid;
@@ -1735,7 +1703,6 @@ Guidelines:
   document.addEventListener('click',(e)=>{
     if(editingTaskId && e.target.id!=='editNameInput' && !e.target.closest('.taskname')){ commitNameEdit(); }
     if(editingCategory && e.target.id!=='editCatInput' && !e.target.closest('.catname')){ commitCategoryEdit(); }
-    if(openCatPopoverId && !e.target.closest('.popover') && !e.target.closest('.catbtn')){ openCatPopoverId=null; render(); }
   });
   function commitNameEdit(){
     const input = el('editNameInput');
