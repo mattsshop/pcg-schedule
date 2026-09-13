@@ -520,7 +520,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
 
   // Bump this with every update handed off, so you can glance at the top bar and
   // confirm a new deploy actually loaded (vs. a stale cached copy).
-  const APP_VERSION = 'v1.8';
+  const APP_VERSION = 'v1.9';
   { const v = document.getElementById('appVersion'); if(v) v.textContent = APP_VERSION; }
 
   // Set this to your Wix Velo backend function URL (e.g. "https://yourdomain.com/_functions/generateSchedule")
@@ -2105,7 +2105,20 @@ Guidelines:
             await window.__fb.setDoc(window.__fb.doc(window.__fb.db,'userStatus',d.id),{status:'rejected'},{merge:true});
             renderUsersModal();
           };
-          row.appendChild(approveBtn); row.appendChild(rejectBtn);
+          const deleteBtn=document.createElement('button'); deleteBtn.className='ghostbtn'; deleteBtn.textContent='Delete';
+          deleteBtn.style.color='var(--critical)';
+          deleteBtn.onclick=async()=>{
+            const ok = await showDialog({
+              title:'Delete this user record?',
+              message:`Removes ${data.email||d.id} from this list and revokes their access. This does NOT delete their actual login — if they sign in again, they'll show up as a new pending request. To fully block sign-in, delete them in Firebase Console > Authentication.`,
+              buttons:[{label:'Cancel', value:null},{label:'Delete', value:true, primary:true}]
+            });
+            if(!ok) return;
+            try{ await window.__fb.deleteDoc(window.__fb.doc(window.__fb.db,'userStatus',d.id)); }
+            catch(e){ console.error(e); }
+            renderUsersModal();
+          };
+          row.appendChild(approveBtn); row.appendChild(rejectBtn); row.appendChild(deleteBtn);
         }
         body.appendChild(row);
       });
