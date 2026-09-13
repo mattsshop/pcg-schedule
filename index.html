@@ -520,7 +520,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
 
   // Bump this with every update handed off, so you can glance at the top bar and
   // confirm a new deploy actually loaded (vs. a stale cached copy).
-  const APP_VERSION = 'v1.9';
+  const APP_VERSION = 'v2.0';
   { const v = document.getElementById('appVersion'); if(v) v.textContent = APP_VERSION; }
 
   // Set this to your Wix Velo backend function URL (e.g. "https://yourdomain.com/_functions/generateSchedule")
@@ -1577,6 +1577,56 @@ Guidelines:
     await loadActiveProject(projectList[0]);
   });
 
+  async function inviteFlow(){
+    const email = await showDialog({
+      title:'Invite someone',
+      message:'Enter the email of someone who has signed into this app at least once.',
+      input:true,
+      buttons:[{label:'Cancel', value:null},{label:'Invite', value:'go', primary:true, useInput:true}]
+    });
+    if(!email) return;
+    const normEmail = email.trim().toLowerCase();
+    if(!normEmail) return;
+    try{
+      const q = window.__fb.query(window.__fb.collection(window.__fb.db,'userStatus'), window.__fb.where('email','==',normEmail));
+      const snap = await window.__fb.getDocs(q);
+      if(snap.empty){
+        await showDialog({title:'User not found', message:'That person needs to sign into the app at least once before you can invite them.', buttons:[{label:'OK', value:true, primary:true}]});
+        return;
+      }
+      const inviteUid = snap.docs[0].id;
+      await window.__fb.setDoc(sharedProjectDocRef(activeProjectId), {members: window.__fb.arrayUnion(inviteUid)}, {merge:true});
+      await showDialog({title:'Invited', message:`They'll see "${activeProject}" next time they open the app.`, buttons:[{label:'OK', value:true, primary:true}]});
+    }catch(e){
+      console.error(e);
+      await showDialog({title:'Something went wrong', message:'Could not send the invite. Try again.', buttons:[{label:'OK', value:true, primary:true}]});
+    }
+  }
+
+  async function unshareFlow(){
+    const confirmed = await showDialog({
+      title:'Make private again?',
+      message:`This removes shared access for everyone else — "${activeProject}" will only be visible to you from then on. Other members won't see it anymore.`,
+      buttons:[{label:'Cancel', value:null},{label:'Unshare', value:true, primary:true}]
+    });
+    if(!confirmed) return;
+    const oldSharedId = activeProjectId;
+    const privatePayload = {
+      startDate: startDateStr, categoryOrder, collapsedCategories, workWeek,
+      tasks: tasks.map(t=>({id:t.id,name:t.name,duration:t.duration,deps:t.deps,startOffset:t.startOffset,category:t.category||UNCATEGORIZED,percent:t.percent||0}))
+    };
+    try{
+      await saveProject(activeProject, privatePayload);
+      await window.__fb.deleteDoc(sharedProjectDocRef(oldSharedId));
+    }catch(e){
+      console.error(e);
+      await showDialog({title:'Could not unshare project', message:'Something went wrong making this private again. Try again.', buttons:[{label:'OK', value:true, primary:true}]});
+      return;
+    }
+    projectList = await loadProjectList();
+    await loadActiveProject({type:'private', id:activeProject, name:activeProject});
+  }
+
   el('shareProjectBtn').addEventListener('click', async ()=>{
     if(!activeProjectId) return;
     if(activeProjectType==='private'){
@@ -1607,30 +1657,21 @@ Guidelines:
       }
       projectList = await loadProjectList();
       await loadActiveProject({type:'shared', id:newDocId, name: activeProject});
+      await inviteFlow();
+      return;
     }
 
-    const email = await showDialog({
-      title:'Invite someone',
-      message:'Enter the email of someone who has signed into this app at least once.',
-      input:true,
-      buttons:[{label:'Cancel', value:null},{label:'Invite', value:'go', primary:true, useInput:true}]
-    });
-    if(!email) return;
-    const normEmail = email.trim().toLowerCase();
-    if(!normEmail) return;
-    try{
-      const q = window.__fb.query(window.__fb.collection(window.__fb.db,'userStatus'), window.__fb.where('email','==',normEmail));
-      const snap = await window.__fb.getDocs(q);
-      if(snap.empty){
-        await showDialog({title:'User not found', message:'That person needs to sign into the app at least once before you can invite them.', buttons:[{label:'OK', value:true, primary:true}]});
-        return;
-      }
-      const inviteUid = snap.docs[0].id;
-      await window.__fb.setDoc(sharedProjectDocRef(activeProjectId), {members: window.__fb.arrayUnion(inviteUid)}, {merge:true});
-      await showDialog({title:'Invited', message:`They'll see "${activeProject}" next time they open the app.`, buttons:[{label:'OK', value:true, primary:true}]});
-    }catch(e){
-      console.error(e);
-      await showDialog({title:'Something went wrong', message:'Could not send the invite. Try again.', buttons:[{label:'OK', value:true, primary:true}]});
+    if(activeProjectOwnerUid===currentUid){
+      const choice = await showDialog({
+        title:'Manage sharing',
+        message:`"${activeProject}" is currently shared.`,
+        buttons:[{label:'Cancel', value:null},{label:'Unshare (make private)', value:'unshare'},{label:'Invite someone', value:'invite', primary:true}]
+      });
+      if(!choice) return;
+      if(choice==='unshare'){ await unshareFlow(); return; }
+      await inviteFlow();
+    } else {
+      await inviteFlow();
     }
   });
 
@@ -2085,7 +2126,9 @@ Guidelines:
         row.style.cssText='display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid var(--line-soft);font-size:13px;';
         const info = document.createElement('div');
         info.style.flex='1';
-        info.innerHTML = `${escapeHtml(data.email||d.id)}<div style="font-size:11px;color:var(--ink-soft);text-transform:capitalize;">${escapeHtml(data.status||'pending')}</div>`;
+        const statusColors = {approved:'#2E7D4A', pending:'#B08A2E', rejected:'#C85A1D'};
+        const statusColor = statusColors[data.status] || '#888';
+        info.innerHTML = `${escapeHtml(data.email||d.id)}<div style="display:inline-block;margin-top:3px;font-size:10px;font-weight:700;letter-spacing:0.03em;text-transform:uppercase;color:#fff;background:${statusColor};padding:2px 8px;border-radius:10px;">${escapeHtml(data.status||'pending')}</div>`;
         row.appendChild(info);
         if((data.email||'').toLowerCase()===ADMIN_EMAIL.toLowerCase()){
           const badge=document.createElement('span'); badge.textContent='Admin';
