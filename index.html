@@ -520,7 +520,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
 
   // Bump this with every update handed off, so you can glance at the top bar and
   // confirm a new deploy actually loaded (vs. a stale cached copy).
-  const APP_VERSION = 'v1.7';
+  const APP_VERSION = 'v1.8';
   { const v = document.getElementById('appVersion'); if(v) v.textContent = APP_VERSION; }
 
   // Set this to your Wix Velo backend function URL (e.g. "https://yourdomain.com/_functions/generateSchedule")
@@ -2035,6 +2035,17 @@ Guidelines:
 
   // Creates a userStatus/{uid} doc on first sign-in (status starts 'pending' unless it's
   // the admin account, which is auto-approved), and returns the current status.
+  // Fire-and-forget: notifies the admin by email when someone new requests access.
+  // Failure here should never block sign-in, so errors are only logged.
+  const NOTIFY_URL = 'https://mattsshop.com/_functions/notifyAccessRequest';
+  function notifyAccessRequest(email){
+    fetch(NOTIFY_URL, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ email })
+    }).catch(e=>console.error('notifyAccessRequest failed', e));
+  }
+
   async function ensureUserStatus(user){
     const email = (user.email||'').toLowerCase();
     const ref = window.__fb.doc(window.__fb.db,'userStatus',user.uid);
@@ -2047,6 +2058,7 @@ Guidelines:
           status: isAdminUser ? 'approved' : 'pending',
           requestedAt: new Date().toISOString()
         });
+        if(!isAdminUser) notifyAccessRequest(email);
         return isAdminUser ? 'approved' : 'pending';
       }
       const data = snap.data();
