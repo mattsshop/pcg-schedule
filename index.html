@@ -81,7 +81,7 @@ h1,h2,h3,.head{
 #gridwrap{display:inline-block;min-width:100%;position:relative;}
 
 .row{display:flex;border-bottom:1px solid var(--line-soft);height:46px;}
-.row.header-row{height:auto;border-bottom:2px solid var(--line);}
+.row.header-row{height:auto;border-bottom:2px solid var(--line);position:sticky;top:0;z-index:9;}
 .row.category-row{background:#EAE3D2;}
 .row.category-row .chart-cell{background:#F1ECDE;}
 
@@ -520,7 +520,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
 
   // Bump this with every update handed off, so you can glance at the top bar and
   // confirm a new deploy actually loaded (vs. a stale cached copy).
-  const APP_VERSION = 'v2.0';
+  const APP_VERSION = 'v2.1';
   { const v = document.getElementById('appVersion'); if(v) v.textContent = APP_VERSION; }
 
   // Set this to your Wix Velo backend function URL (e.g. "https://yourdomain.com/_functions/generateSchedule")
@@ -807,7 +807,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
     const chartWidth = totalDays*ppd;
 
     el('projFinish').innerHTML = tasks.length
-      ? `Est. completion: <b>${fmtDate(addDays(startDateStr,calOff(finish)))}</b> · ${finish} ${workWeek?'working ':''}days`
+      ? `Est. completion: <b>${fmtDate(addDays(startDateStr,calOff(finish)-1))}</b> · ${finish} ${workWeek?'working ':''}days`
       : '';
     el('zoomDay').className = zoom==='day' ? 'active' : '';
     el('zoomWeek').className = zoom==='week' ? 'active' : '';
@@ -944,7 +944,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
 
         const catFinishCol=document.createElement('div');
         catFinishCol.className='datecol'; catFinishCol.style.gridColumn='finish';
-        if(members.length){ catFinishCol.textContent=fmtDateShort(addDays(startDateStr,cefCal)); catFinishCol.title='Finish: '+fmtDate(addDays(startDateStr,cefCal)); }
+        if(members.length){ catFinishCol.textContent=fmtDateShort(addDays(startDateStr,cefCal-1)); catFinishCol.title='Finish: '+fmtDate(addDays(startDateStr,cefCal-1)); }
         sb.appendChild(catFinishCol);
 
         const pctBadge=document.createElement('div');
@@ -983,7 +983,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
           fill.className='fill'; fill.style.width=Math.min(100,Math.max(0,rollup.percent))+'%';
           cbar.appendChild(fill);
           const lbl=document.createElement('div');
-          lbl.className='lbl'; lbl.textContent=`${fmtDate(addDays(startDateStr,cesCal))} – ${fmtDate(addDays(startDateStr,cefCal))}`;
+          lbl.className='lbl'; lbl.textContent=`${fmtDate(addDays(startDateStr,cesCal))} – ${fmtDate(addDays(startDateStr,cefCal-1))}`;
           cbar.appendChild(lbl);
           cc.appendChild(cbar);
         }
@@ -1020,8 +1020,8 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
       sb.appendChild(startCol);
 
       const finishCol=document.createElement('div');
-      finishCol.className='datecol'; finishCol.style.gridColumn='finish'; finishCol.textContent=fmtDateShort(addDays(startDateStr,efCal));
-      finishCol.title='Finish: '+fmtDate(addDays(startDateStr,efCal));
+      finishCol.className='datecol'; finishCol.style.gridColumn='finish'; finishCol.textContent=fmtDateShort(addDays(startDateStr,efCal-1));
+      finishCol.title='Finish: '+fmtDate(addDays(startDateStr,efCal-1));
       sb.appendChild(finishCol);
 
       const dur=document.createElement('input');
@@ -1059,7 +1059,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
         ? t.name
         : (ppd*(efCal-esCal)>60 ? `${t.duration}${workWeek?'wd':'d'} · ${t.percent||0}%` : '');
       bar.appendChild(lbl);
-      bar.title=`${t.name}\n${fmtDate(addDays(startDateStr,esCal))} → ${fmtDate(addDays(startDateStr,efCal))}\n${r.critical?'Critical path':'Slack: '+r.slack+(workWeek?'wd':'d')}\n${t.percent||0}% complete\nDrag to reschedule · click to open details`;
+      bar.title=`${t.name}\n${fmtDate(addDays(startDateStr,esCal))} → ${fmtDate(addDays(startDateStr,efCal-1))}\n${r.critical?'Critical path':'Slack: '+r.slack+(workWeek?'wd':'d')}\n${t.percent||0}% complete\nDrag to reschedule · click to open details`;
       cc.appendChild(bar);
 
       // drag to reschedule, click (no drag) to open details
@@ -1817,7 +1817,7 @@ Guidelines:
       startRow.innerHTML = `<div class="field"><label>Start (auto-scheduled)</label><div class="modal-readonly">${fmtDate(addDays(startDateStr,calOff(r.ES)))}</div></div>
         <div class="field"><label>Finish (computed)</label><div class="modal-readonly" id="modalFinish"></div></div>`;
     }
-    el('modalFinish').textContent = fmtDate(addDays(startDateStr, calOff(r.EF)));
+    el('modalFinish').textContent = fmtDate(addDays(startDateStr, calOff(r.EF)-1));
 
     const depsWrap = el('modalDeps');
     depsWrap.innerHTML='';
@@ -1988,7 +1988,7 @@ Guidelines:
     rows.forEach(rowData=>{
       if(rowData.type==='category'){
         const rollup = categoryRollup(rowData.members, result);
-        const range = rowData.members.length ? ` — ${fmtDate(addDays(startDateStr,calOff(rollup.es)))} to ${fmtDate(addDays(startDateStr,calOff(rollup.ef)))} · ${rollup.percent}% complete` : '';
+        const range = rowData.members.length ? ` — ${fmtDate(addDays(startDateStr,calOff(rollup.es)))} to ${fmtDate(addDays(startDateStr,calOff(rollup.ef)-1))} · ${rollup.percent}% complete` : '';
         html += `<tr class="print-cat-row"><td colspan="6">${escapeHtml(rowData.name)} (${rowData.members.length})${range}</td></tr>`;
       } else {
         const t = rowData.task;
@@ -1998,7 +1998,7 @@ Guidelines:
           if(!p) return '';
           return p.name + (d.lag ? ` (${d.lag>0?'+':''}${d.lag}${workWeek?'wd':'d'})` : '');
         }).filter(Boolean).join(', ');
-        html += `<tr><td>${escapeHtml(t.name)}</td><td>${fmtDate(addDays(startDateStr,calOff(r.ES)))}</td><td>${fmtDate(addDays(startDateStr,calOff(r.EF)))}</td><td>${t.duration}${workWeek?'wd':'d'}</td><td>${t.percent||0}%</td><td>${preds?escapeHtml(preds):'—'}</td></tr>`;
+        html += `<tr><td>${escapeHtml(t.name)}</td><td>${fmtDate(addDays(startDateStr,calOff(r.ES)))}</td><td>${fmtDate(addDays(startDateStr,calOff(r.EF)-1))}</td><td>${t.duration}${workWeek?'wd':'d'}</td><td>${t.percent||0}%</td><td>${preds?escapeHtml(preds):'—'}</td></tr>`;
       }
     });
     html += `</tbody></table>`;
