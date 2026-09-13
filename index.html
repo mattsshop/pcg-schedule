@@ -67,6 +67,7 @@ h1,h2,h3,.head{
 }
 #topbar button{cursor:pointer;}
 #topbar button:hover{background:#2C4150;}
+#topbar button:disabled{opacity:0.4;cursor:not-allowed;background:#22323F;}
 #topbar .zoomgroup{display:flex;border:1px solid #3B4E5C;border-radius:3px;overflow:hidden;}
 #topbar .zoomgroup button{border:none;border-radius:0;}
 #topbar .zoomgroup button.active{background:var(--accent);}
@@ -289,7 +290,12 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
     <label>Project</label>
     <select id="projectSelect"></select>
     <button id="newProjectBtn" title="New project">+ Project</button>
+    <div class="zoomgroup">
+      <button id="undoBtn" title="Undo">↶ Undo</button>
+      <button id="redoBtn" title="Redo">↷ Redo</button>
+    </div>
     <button id="deleteProjectBtn" title="Delete this project">Delete Project</button>
+    <button id="renameProjectBtn" title="Rename this project">Rename</button>
     <button id="shareProjectBtn" title="Invite someone to view/edit this project live">🔗 Share</button>
     <label>Start</label>
     <input type="date" id="startDate">
@@ -520,7 +526,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
 
   // Bump this with every update handed off, so you can glance at the top bar and
   // confirm a new deploy actually loaded (vs. a stale cached copy).
-  const APP_VERSION = 'v2.1';
+  const APP_VERSION = 'v2.3';
   { const v = document.getElementById('appVersion'); if(v) v.textContent = APP_VERSION; }
 
   // Set this to your Wix Velo backend function URL (e.g. "https://yourdomain.com/_functions/generateSchedule")
@@ -1223,6 +1229,67 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
     });
   }
 
+  // ---------- undo/redo (private projects only — see note above) ----------
+  let history = [];
+  let historyIndex = -1;
+  let isApplyingHistory = false;
+  const MAX_HISTORY = 100;
+
+  function snapshotState(){
+    return {
+      tasks: JSON.parse(JSON.stringify(tasks)),
+      categoryOrder: [...categoryOrder],
+      collapsedCategories: [...collapsedCategories],
+      workWeek: workWeek
+    };
+  }
+  function resetHistory(){
+    history = [snapshotState()];
+    historyIndex = 0;
+    updateUndoRedoButtons();
+  }
+  function recordHistory(){
+    if(isApplyingHistory) return;
+    if(activeProjectType!=='private') return;
+    history = history.slice(0, historyIndex+1);
+    history.push(snapshotState());
+    if(history.length > MAX_HISTORY){ history.shift(); } else { historyIndex++; }
+    historyIndex = history.length-1;
+    updateUndoRedoButtons();
+  }
+  function updateUndoRedoButtons(){
+    const enabled = activeProjectType==='private';
+    el('undoBtn').disabled = !enabled || historyIndex<=0;
+    el('redoBtn').disabled = !enabled || historyIndex>=history.length-1;
+    el('undoBtn').title = enabled ? 'Undo' : 'Undo/redo isn\'t available on shared projects, to avoid overwriting a collaborator\'s live edits';
+    el('redoBtn').title = enabled ? 'Redo' : 'Undo/redo isn\'t available on shared projects, to avoid overwriting a collaborator\'s live edits';
+  }
+  async function applyHistoryIndex(idx){
+    if(idx<0 || idx>=history.length) return;
+    const snap = history[idx];
+    isApplyingHistory = true;
+    tasks = JSON.parse(JSON.stringify(snap.tasks));
+    categoryOrder = [...snap.categoryOrder];
+    collapsedCategories = [...snap.collapsedCategories];
+    workWeek = snap.workWeek;
+    el('workWeekToggle').checked = workWeek;
+    await persist();
+    isApplyingHistory = false;
+    historyIndex = idx;
+    updateUndoRedoButtons();
+    render();
+  }
+  el('undoBtn').addEventListener('click', ()=> applyHistoryIndex(historyIndex-1));
+  el('redoBtn').addEventListener('click', ()=> applyHistoryIndex(historyIndex+1));
+  document.addEventListener('keydown',(e)=>{
+    const tag = (e.target.tagName||'').toLowerCase();
+    if(tag==='input' || tag==='textarea' || e.target.isContentEditable) return;
+    const mod = e.ctrlKey || e.metaKey;
+    if(!mod) return;
+    if(e.key==='z' && !e.shiftKey){ e.preventDefault(); applyHistoryIndex(historyIndex-1); }
+    else if((e.key==='z' && e.shiftKey) || e.key==='y'){ e.preventDefault(); applyHistoryIndex(historyIndex+1); }
+  });
+
   async function persist(){
     if(!activeProjectId) return;
     const payload = {
@@ -1239,6 +1306,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
       } else {
         await saveProject(activeProjectId, payload);
       }
+      recordHistory();
     }catch(e){ console.error(e); }
   }
 
@@ -1265,6 +1333,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
         el('workWeekToggle').checked = workWeek;
         render();
       }, (err)=>console.error(err));
+      resetHistory();
     } else {
       const data = await loadProject(ref.id);
       if(data){
@@ -1281,6 +1350,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
         workWeek = false;
         await persist();
       }
+      resetHistory();
       el('startDate').value = startDateStr;
       el('workWeekToggle').checked = workWeek;
     }
@@ -1541,6 +1611,42 @@ Guidelines:
 
   el('nameNarrowBtn').addEventListener('click', ()=> setSidebarWidth(SIDEBAR_W-60));
   el('nameWidenBtn').addEventListener('click', ()=> setSidebarWidth(SIDEBAR_W+60));
+
+  el('renameProjectBtn').addEventListener('click', async ()=>{
+    if(!activeProjectId) return;
+    const newName = await showDialog({
+      title:'Rename project',
+      message:'Enter a new name for this project:',
+      input:true,
+      inputDefault: activeProject,
+      buttons:[{label:'Cancel', value:null},{label:'Rename', value:'go', primary:true, useInput:true}]
+    });
+    if(!newName || newName===activeProject) return;
+    if(projectList.some(p=>p.name===newName && !(p.type===activeProjectType && p.id===activeProjectId))){
+      await showDialog({title:'Name already used', message:'A project with that name already exists.', buttons:[{label:'OK', value:true, primary:true}]});
+      return;
+    }
+    try{
+      if(activeProjectType==='shared'){
+        await window.__fb.setDoc(sharedProjectDocRef(activeProjectId), {name:newName}, {merge:true});
+        projectList = await loadProjectList();
+        await loadActiveProject({type:'shared', id:activeProjectId, name:newName});
+      } else {
+        const oldId = activeProjectId;
+        const payload = {
+          startDate: startDateStr, categoryOrder, collapsedCategories, workWeek,
+          tasks: tasks.map(t=>({id:t.id,name:t.name,duration:t.duration,deps:t.deps,startOffset:t.startOffset,category:t.category||UNCATEGORIZED,percent:t.percent||0}))
+        };
+        await saveProject(newName, payload);
+        await deleteProjectDb(oldId);
+        projectList = await loadProjectList();
+        await loadActiveProject({type:'private', id:newName, name:newName});
+      }
+    }catch(e){
+      console.error(e);
+      await showDialog({title:'Could not rename project', message:'Something went wrong. Try again.', buttons:[{label:'OK', value:true, primary:true}]});
+    }
+  });
 
   el('deleteProjectBtn').addEventListener('click', async ()=>{
     if(!activeProjectId) return;
