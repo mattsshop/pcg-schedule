@@ -316,6 +316,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
       <button id="zoomWeek">Week</button>
     </div>
     <button id="rollupAllBtn">Roll Up All</button>
+    <button id="unlinkedReportBtn" title="Find tasks with no dependency that don't start at the project's beginning">Check Links</button>
     <div style="position:relative;display:inline-block;">
       <button id="printBtn">Print ▾</button>
       <div class="popover" id="printMenu" style="display:none;top:36px;left:0;width:220px;">
@@ -483,6 +484,19 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
   </div>
 </div>
 
+<div class="modal-overlay" id="unlinkedReportOverlay">
+  <div class="modal" style="width:460px;">
+    <div class="modal-header">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:600;flex:1;">Unlinked Tasks Report</div>
+      <button class="rowbtn" id="unlinkedReportClose" title="Close">✕</button>
+    </div>
+    <div class="modal-body" id="unlinkedReportBody" style="max-height:55vh;overflow:auto;"></div>
+    <div class="modal-footer">
+      <button class="primarybtn" id="unlinkedReportDone">Done</button>
+    </div>
+  </div>
+</div>
+
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
   import {
@@ -526,7 +540,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
 
   // Bump this with every update handed off, so you can glance at the top bar and
   // confirm a new deploy actually loaded (vs. a stale cached copy).
-  const APP_VERSION = 'v2.3';
+  const APP_VERSION = 'v2.4';
   { const v = document.getElementById('appVersion'); if(v) v.textContent = APP_VERSION; }
 
   // Set this to your Wix Velo backend function URL (e.g. "https://yourdomain.com/_functions/generateSchedule")
@@ -2219,6 +2233,40 @@ Guidelines:
       return 'pending';
     }
   }
+
+  // ---------- unlinked tasks report ----------
+  // Flags tasks with no dependency that don't start at the project's beginning —
+  // usually means something should be linked to an earlier task but isn't, or the
+  // date was hand-pinned and won't reflow if earlier work shifts.
+  function computeUnlinkedTasks(){
+    return tasks.filter(t => (!t.deps || t.deps.length===0) && (t.startOffset||0) > 0);
+  }
+  function openUnlinkedReport(){
+    const results = computeUnlinkedTasks();
+    const body = el('unlinkedReportBody');
+    if(results.length===0){
+      body.innerHTML = '<div style="padding:16px;color:var(--ink-soft);font-size:13px;">No unlinked tasks found — every task after the project start is connected to a dependency.</div>';
+    } else {
+      let html = `<div style="padding:8px 4px 12px;font-size:12px;color:var(--ink-soft);">${results.length} task${results.length>1?'s':''} start with no dependency partway through the schedule. Worth checking whether each should be linked to something earlier — otherwise its date won't move if earlier work shifts.</div>`;
+      html += '<div style="display:flex;flex-direction:column;">';
+      results.forEach(t=>{
+        const startDate = fmtDate(addDays(startDateStr, calOff(t.startOffset||0)));
+        html += `<div style="display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid var(--line-soft);font-size:13px;">
+          <div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(t.name)}<div style="font-size:11px;color:var(--ink-soft);">${escapeHtml(t.category||UNCATEGORIZED)} · starts ${startDate}</div></div>
+          <button class="ghostbtn" data-taskid="${t.id}">Open</button>
+        </div>`;
+      });
+      html += '</div>';
+      body.innerHTML = html;
+      body.querySelectorAll('button[data-taskid]').forEach(btn=>{
+        btn.onclick = ()=>{ el('unlinkedReportOverlay').classList.remove('open'); openModal(btn.dataset.taskid); };
+      });
+    }
+    el('unlinkedReportOverlay').classList.add('open');
+  }
+  el('unlinkedReportBtn').addEventListener('click', openUnlinkedReport);
+  el('unlinkedReportClose').addEventListener('click', ()=>el('unlinkedReportOverlay').classList.remove('open'));
+  el('unlinkedReportDone').addEventListener('click', ()=>el('unlinkedReportOverlay').classList.remove('open'));
 
   function renderUsersModal(){
     const body = el('usersModalBody');
