@@ -98,8 +98,8 @@ h1,h2,h3,.head{
     [name] 1fr
     [start] 50px
     [finish] 50px
-    [dur] 32px
-    [pct] 32px
+    [dur] 42px
+    [pct] 42px
     [details] 20px
     [del] 20px;
   column-gap:5px;
@@ -136,7 +136,7 @@ h1,h2,h3,.head{
 .catpct{font-size:11px;color:var(--ink-soft);font-weight:600;white-space:nowrap;}
 
 .numinput{
-  width:32px;font-size:11px;text-align:center;
+  width:38px;font-size:11px;text-align:center;
   border:1px solid var(--line);border-radius:2px;padding:3px 1px;
   background:#fff;
 }
@@ -541,7 +541,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
 
   // Bump this with every update handed off, so you can glance at the top bar and
   // confirm a new deploy actually loaded (vs. a stale cached copy).
-  const APP_VERSION = 'v2.5';
+  const APP_VERSION = 'v2.6';
   { const v = document.getElementById('appVersion'); if(v) v.textContent = APP_VERSION; }
 
   // Set this to your Wix Velo backend function URL (e.g. "https://yourdomain.com/_functions/generateSchedule")
@@ -843,7 +843,7 @@ svg.depsvg{position:absolute;top:0;left:0;pointer-events:none;}
     headerRow.className='row header-row';
     const hsb = document.createElement('div');
     hsb.className='sidebar-cell';
-    hsb.innerHTML = `<div class="taskname" style="grid-column:name;font-family:'Barlow Condensed';font-size:15px;font-weight:600;color:#fff;">Task</div><div class="datecol" style="grid-column:start;">Start</div><div class="datecol" style="grid-column:finish;">Finish</div><div class="datecol" style="grid-column:pct;">%</div>`;
+    hsb.innerHTML = `<div class="taskname" style="grid-column:name;font-family:'Barlow Condensed';font-size:15px;font-weight:600;color:#fff;">Task</div><div class="datecol" style="grid-column:start;">Start</div><div class="datecol" style="grid-column:finish;">Finish</div><div class="datecol" style="grid-column:dur;overflow:visible;white-space:nowrap;">Days</div><div class="datecol" style="grid-column:pct;overflow:visible;white-space:nowrap;">% Complete</div>`;
     headerRow.appendChild(hsb);
     const hchart = document.createElement('div');
     hchart.className='chart-cell dateheader';
